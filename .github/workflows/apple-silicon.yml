@@ -1,0 +1,35 @@
+name: Apple Silicon build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  arm64:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install universal SDL2 framework
+        run: ./scripts/bootstrap-sdl2.sh
+
+      - name: Build AtariX for arm64
+        run: |
+          xcodebuild \
+            -project src/AtariX-MT/AtariX/AtariX.xcodeproj \
+            -scheme AtariX-Application \
+            -configuration Release \
+            -derivedDataPath "${RUNNER_TEMP}/AtariXDerivedData" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Verify architecture
+        run: |
+          APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
+          lipo -info "${APP}/Contents/MacOS/AtariX"
+          lipo -info "${APP}/Contents/Frameworks/SDL2.framework/SDL2"
