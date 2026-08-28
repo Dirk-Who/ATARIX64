@@ -1,0 +1,34 @@
+name: Temporary AtariX source import
+
+on:
+  push:
+    paths:
+      - AtariX-import.zip
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p import-stage
+          unzip -q AtariX-import.zip -d import-stage
+          test -d import-stage/AtariX-0.4F-Apple-Silicon-source
+          shopt -s dotglob nullglob
+          cp -a import-stage/AtariX-0.4F-Apple-Silicon-source/. .
+          find . -name .DS_Store -type f -delete
+          rm -rf __MACOSX import-stage
+          rm -f AtariX-import.zip
+          rm -f .github/workflows/_temporary_import.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f -A
+          git commit -m "Import AtariX 0.4F Apple Silicon source"
+          git push
