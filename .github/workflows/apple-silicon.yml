@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install universal SDL2 framework
-        run: ./scripts/bootstrap-sdl2.sh
+        run: bash ./scripts/bootstrap-sdl2.sh
 
       - name: Build AtariX for arm64
         run: |
