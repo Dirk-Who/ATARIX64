@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="12121" systemVersion="16A323" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none">
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="12121"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="NSApplication">
+            <connections>
+                <outlet property="delegate" destination="798" id="800"/>
+            </connections>
+        </customObject>
+        <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
+        <customObject id="-3" userLabel="Application"/>
+        <menu title="Main Menu" systemMenu="main" id="29">
+            <items>
+                <menuItem title="AtariX" id="56">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="AtariX" systemMenu="apple" id="57">
+                        <items>
+                            <menuItem title="Über AtariX..." id="58">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="actionAbout:" target="798" id="Ued-9y-nT5"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="236"/>
+                            <menuItem title="Einstellungen…" keyEquivalent="," id="129">
+                                <connections>
+                                    <action selector="actionPreferences:" target="798" id="802"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="143"/>
+                            <menuItem title="Dienste" id="131">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Dienste" systemMenu="services" id="130"/>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="144"/>
+                            <menuItem title="AtariX ausblenden" keyEquivalent="h" id="134">
+                                <connections>
+                                    <action selector="hide:" target="-1" id="367"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Andere ausblenden" keyEquivalent="h" id="145">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="hideOtherApplications:" target="-1" id="368"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Alle einblenden" id="150">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="unhideAllApplications:" target="-1" id="370"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="149"/>
+                            <menuItem title="AtariX beenden" keyEquivalent="q" id="136">
+                                <connections>
+                                    <action selector="actionQuit:" target="798" id="803"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Ablage" id="83">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Ablage" id="81">
+                        <items>
+                            <menuItem title="Ausführen" keyEquivalent="r" id="793">
+                                <connections>
+                                    <action selector="actionRun:" target="798" id="801"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Neu" enabled="NO" keyEquivalent="n" id="82"/>
+                            <menuItem title="Wähle Rootfs…" keyEquivalent="o" id="72">
+                                <connections>
+                                    <action selector="actionChooseRootfs:" target="798" id="806"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Benutzte Dokumente" id="124">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Benutzte Dokumente" systemMenu="recentDocuments" id="125">
+                                    <items>
+                                        <menuItem title="Einträge löschen" id="126">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="clearRecentDocuments:" target="-1" id="127"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="79"/>
+                            <menuItem title="Schließen" keyEquivalent="w" id="73">
+                                <connections>
+                                    <action selector="performClose:" target="-1" id="193"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Sichern…" enabled="NO" keyEquivalent="s" id="75">
+                                <connections>
+                                    <action selector="saveDocument:" target="-1" id="362"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Rootfs wiederherstellen..." id="112">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="actionRevertRootfs:" target="798" id="807"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="74"/>
+                            <menuItem title="Papierformat..." enabled="NO" keyEquivalent="P" id="77">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="runPageLayout:" target="-1" id="87"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Drucken…" enabled="NO" keyEquivalent="p" id="78">
+                                <connections>
+                                    <action selector="print:" target="-1" id="86"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Bearbeiten" id="681">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Bearbeiten" id="682">
+                        <items>
+                            <menuItem title="Widerrufen" keyEquivalent="z" id="683">
+                                <connections>
+                                    <action selector="undo:" target="-1" id="746"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Wiederholen" keyEquivalent="Z" id="684">
+                                <connections>
+                                    <action selector="redo:" target="-1" id="742"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="685"/>
+                            <menuItem title="Ausschneiden" keyEquivalent="x" id="686">
+                                <connections>
+                                    <action selector="actionCut:" target="798" id="5Tj-zL-F5p"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Kopieren" keyEquivalent="c" id="687">
+                                <connections>
+                                    <action selector="actionCopy:" target="798" id="MCt-dR-d5m"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Einsetzen" keyEquivalent="v" id="688">
+                                <connections>
+                                    <action selector="actionPaste:" target="798" id="joc-pS-vcE"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Löschen" id="690">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="delete:" target="-1" id="753"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Alles auswählen" keyEquivalent="a" id="691">
+                                <connections>
+                                    <action selector="selectAll:" target="-1" id="755"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="692"/>
+                            <menuItem title="Suchen" id="693">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Suchen" id="731">
+                                    <items>
+                                        <menuItem title="Suchen…" tag="1" keyEquivalent="f" id="732">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="769"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Suchen und Ersetzen…" tag="12" keyEquivalent="f" id="791">
+                                            <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="792"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Weitersuchen (vorwärts)" tag="2" keyEquivalent="g" id="733">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="772"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Weitersuchen (rückwärts)" tag="3" keyEquivalent="G" id="734">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="768"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Auswahl suchen" tag="7" keyEquivalent="e" id="735">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="770"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Auswahl anzeigen" keyEquivalent="j" id="736">
+                                            <connections>
+                                                <action selector="centerSelectionInVisibleArea:" target="-1" id="771"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Ansicht" id="295">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Ansicht" id="296">
+                        <items>
+                            <menuItem title="Vollbildmodus" keyEquivalent="f" id="fullscreen-menu-04">
+                                <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
+                                <connections>
+                                    <action selector="actionToggleFullscreen:" target="798" id="fullscreen-action-04"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="fullscreen-separator-04"/>
+                            <menuItem title="Werkzeugleiste einblenden" keyEquivalent="t" id="297">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleToolbarShown:" target="-1" id="366"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Werkzeugleiste anpassen…" id="298">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="runToolbarCustomizationPalette:" target="-1" id="365"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Fenster" id="19">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Fenster" systemMenu="window" id="24">
+                        <items>
+                            <menuItem title="In Dock ablegen" keyEquivalent="m" id="23">
+                                <connections>
+                                    <action selector="performMiniaturize:" target="-1" id="37"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Zoomen" id="239">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="performZoom:" target="-1" id="240"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="92"/>
+                            <menuItem title="Alle nach vorne bringen" id="5">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="arrangeInFront:" target="-1" id="39"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Hilfe" id="103">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Hilfe" systemMenu="help" id="106">
+                        <items>
+                            <menuItem title="Hilfe zu AtariX" keyEquivalent="?" id="111">
+                                <connections>
+                                    <action selector="showHelp:" target="-1" id="360"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+            </items>
+        </menu>
+        <customObject id="798" userLabel="AppDelegate" customClass="AppDelegate"/>
+    </objects>
+</document>

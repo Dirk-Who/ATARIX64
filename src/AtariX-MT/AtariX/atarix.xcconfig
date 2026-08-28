@@ -1,0 +1,13 @@
+//
+//  atarix.xcconfig
+//  AtariX
+//
+//  Created by Thorsten on 19/07/2021.
+//
+//
+
+ARCHS = arm64 x86_64
+CLANG_CXX_LANGUAGE_STANDARD = c++17
+CLANG_CXX_LIBRARY = libc++
+MACOSX_DEPLOYMENT_TARGET = 11.0
+STRINGS_FILE_OUTPUT_ENCODING = UTF-8

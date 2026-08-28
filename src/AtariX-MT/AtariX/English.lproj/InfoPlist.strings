@@ -1,0 +1,6 @@
+﻿/* Localized versions of Info.plist keys */
+
+CFBundleName = "AtariX";
+CFBundleShortVersionString = "AtariX Version @VERSION@";
+CFBundleGetInfoString = "AtariX Version @VERSION@, Copyright 2011-2014 Andreas Kromke.";
+NSHumanReadableCopyright = "Copyright 2014 Andreas Kromke.";
