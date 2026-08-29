@@ -51,7 +51,6 @@ Historical releases were 32-bit applications. The current source tree targets
 
 # Bugs and Agenda
 
-* Musashi emulator sources must be synchronised with latest version (see below).
 * MAGIC_C folder must be automatically created.
 * Application should be created with latest XCode.
 * tell me
@@ -66,6 +65,7 @@ The AtariX emulator is licensed according to GPLv3, see LICENSE file.
 Copyright 1998-2002 Karl Stenerud  
 Source: https://github.com/kstenerud/Musashi  
 License: https://github.com/kstenerud/Musashi/blob/master/readme.txt  
+Integrated upstream revision and AtariX-specific extensions: [MUSASHI.md](MUSASHI.md)
 
 **SDL library:**  
 Source: https://www.libsdl.org  

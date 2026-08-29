@@ -1,6 +1,11 @@
 #ifndef _NF_NATFEAT_H
 #define _NF_NATFEAT_H
 
+/* Current Musashi no longer exports the legacy INLINE macro. */
+#ifndef INLINE
+#define INLINE static inline
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

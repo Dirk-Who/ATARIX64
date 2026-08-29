@@ -63,6 +63,8 @@
 // Musashi 68k emulator ('C')
 #include "m68k.h"
 #include "m68kcpu.h"
+
+static const int kMusashiTimesliceCycles = 1000000;
 #endif
 
 typedef unsigned int m68k_data_type;
@@ -256,7 +258,10 @@ m68k_addr_type m68k_read_memory_8(m68k_addr_type address)
 #endif
 	if	(address < Adr68kVideoEnd)
 	{
-		return(*((uint8_t*) (HostVideoAddr + (address - Adr68kVideo))));
+		address -= Adr68kVideo;
+		if (bAtariVideoRamHostEndian)
+			address ^= 3;
+		return(*((uint8_t*) (HostVideoAddr + address)));
 	}
 	else
 	{
@@ -301,7 +306,10 @@ m68k_addr_type m68k_read_memory_16(m68k_addr_type address)
 #endif
 	if	(address < Adr68kVideoEnd)
 	{
-		val = *((uint16_t *) (HostVideoAddr + (address - Adr68kVideo)));
+		address -= Adr68kVideo;
+		if (bAtariVideoRamHostEndian)
+			address ^= 2;
+		val = *((uint16_t *) (HostVideoAddr + address));
 		if (bAtariVideoRamHostEndian)
 			return val;		// x86 has bgr instead of rgb
 		else
@@ -393,6 +401,8 @@ void m68k_write_memory_8(m68k_addr_type address, m68k_data_type value)
 	if	(address < Adr68kVideoEnd)
 	{
 		address -= Adr68kVideo;
+		if (bAtariVideoRamHostEndian)
+			address ^= 3;
 		*((uint8_t *) (HostVideoAddr + address)) = (uint8_t) value;
 		atomic_exchange(p_bVideoBufChanged, 1);
 	} else
@@ -450,6 +460,8 @@ void m68k_write_memory_16(m68k_addr_type address, m68k_data_type value)
 	if	(address < Adr68kVideoEnd)
 	{
 		address -= Adr68kVideo;
+		if (bAtariVideoRamHostEndian)
+			address ^= 2;
 		if (bAtariVideoRamHostEndian)
 			*((uint16_t *) (HostVideoAddr + address)) = (uint16_t) value;		// x86 has bgr instead of rgb
 		else
@@ -1627,8 +1639,7 @@ Reinstall the application.
 
 	OpcodeROM = m_RAM68k;	// ROM == RAM
 	m68k_set_int_ack_callback(IRQCallback);
-	m68k_SetBaseAddr(m_RAM68k);
-	m68k_SetHiMem((memptr)m_RAM68ksize);
+	m68k_set_atari_memory_base(m_RAM68k);
 	m_bSpecialExec = false;
 
 	// Reset Musashi 68k emulator
@@ -1793,7 +1804,7 @@ void CMagiC::StopExec( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 	Asgard68000SetExitImmediately();
 #else
-	m68k_StopExecution();
+	m68k_end_timeslice();
 #endif
 	m_bCanRun = false;		// darf nicht laufen
 #ifdef MAGICMACX_DEBUG68K
@@ -1874,7 +1885,7 @@ void CMagiC::EmuThread( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000Execute();
 #else
-		m68k_execute();
+		m68k_execute(kMusashiTimesliceCycles);
 #endif
 //		DebugInfo("CMagiC::EmuThread() --- %d 68k-Zyklen", CyclesExecuted);
 
@@ -1893,7 +1904,7 @@ void CMagiC::EmuThread( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 			Asgard68000SetBusError();
 #else
-			m68k_exception_bus_error();
+			m68k_pulse_bus_error();
 #endif
 			m_bBusErrorPending = false;
 		}
@@ -1907,7 +1918,7 @@ void CMagiC::EmuThread( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 				Asgard68000Execute();		// warte bis IRQ-Callback
 #else
-				m68k_execute();		// warte bis IRQ-Callback
+				m68k_execute(kMusashiTimesliceCycles);		// warte bis IRQ-Callback
 #endif
 //				DebugInfo("CMagiC::Exec() --- Interrupt Pending => %d 68k-Zyklen", CyclesExecuted);
 			}
@@ -1954,7 +1965,7 @@ void CMagiC::EmuThread( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 				Asgard68000Execute();		// warte bis IRQ-Callback
 #else
-				m68k_execute();		// warte bis IRQ-Callback
+				m68k_execute(kMusashiTimesliceCycles);		// warte bis IRQ-Callback
 #endif
 		}
 
@@ -1975,7 +1986,7 @@ void CMagiC::EmuThread( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 				Asgard68000Execute();		// warte bis IRQ-Callback
 #else
-				m68k_execute();		// warte bis IRQ-Callback
+				m68k_execute(kMusashiTimesliceCycles);		// warte bis IRQ-Callback
 #endif
 //				DebugInfo("CMagiC::EmuThread() --- m_bInterrupt200HzPending => %d 68k-Zyklen", CyclesExecuted);
 			}
@@ -1998,7 +2009,7 @@ void CMagiC::EmuThread( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 				Asgard68000Execute();		// warte bis IRQ-Callback
 #else
-				m68k_execute();		// warte bis IRQ-Callback
+				m68k_execute(kMusashiTimesliceCycles);		// warte bis IRQ-Callback
 #endif
 //				DebugInfo("CMagiC::Exec() --- m_bInterruptVBLPending => %d 68k-Zyklen", CyclesExecuted);
 			}
@@ -2043,12 +2054,12 @@ int CMagiC::IRQCallback(int IRQLine)
 {
 	CMagiC *cm = (CMagiC *) pTheMagiC;
 	// Interrupt-Leitungen zurücksetzen
-	m68k_clear_irq(IRQLine);
+	m68k_set_irq(M68K_IRQ_NONE);
 	//Asgard68000SetIRQLine(IRQLine, k68000IRQStateClear);
 	// Verarbeitung bestätigen
 	cm->m_bInterruptPending = false;
 	if	(cm->m_bWaitEmulatorForIRQCallback)
-		m68k_StopExecution();
+		m68k_end_timeslice();
 
 	if	(IRQLine == M68K_IRQ_5)
 		return(69);		// autovector
@@ -2113,14 +2124,20 @@ void CMagiC::PutKeyToBuffer(unsigned char key)
 
 void CMagiC::SendBusError(uint32_t addr, const char *AccessMode)
 {
-#if defined(USE_ASGARD_PPC_68K_EMU)
-	Asgard68000SetExitImmediately();
-#else
-	m68k_StopExecution();
-#endif
-	m_bBusErrorPending = true;
 	m_BusErrorAddress = addr;
 	strcpy(m_BusErrorAccessMode, AccessMode);
+
+#if defined(USE_ASGARD_PPC_68K_EMU)
+	Asgard68000SetExitImmediately();
+	m_bBusErrorPending = true;
+#else
+	/*
+	 * Musashi's bus-error handler longjmps to the trap installed by
+	 * the active m68k_execute() call.  Raise it before that call
+	 * returns; deferring it corrupts the host caller's stack frame.
+	 */
+	m68k_pulse_bus_error();
+#endif
 }
 
 
@@ -2243,7 +2260,7 @@ int CMagiC::SendKeyboard(uint32_t message, bool KeyUp)
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000SetExitImmediately();
 #else
-		m68k_StopExecution();
+		m68k_end_timeslice();
 #endif
 
 		OS_SetEvent(			// aufwecken, wenn in "idle task"
@@ -2322,7 +2339,7 @@ int CMagiC::SendSdlKeyboard(int sdlScanCode, bool KeyUp)
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000SetExitImmediately();
 #else
-		m68k_StopExecution();
+		m68k_end_timeslice();
 #endif
 		
 		OS_SetEvent(			// aufwecken, wenn in "idle task"
@@ -2412,7 +2429,7 @@ int CMagiC::SendKeyboardShift( uint32_t modifiers )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 			Asgard68000SetExitImmediately();
 #else
-			m68k_StopExecution();
+			m68k_end_timeslice();
 #endif
 		}
 
@@ -2468,7 +2485,7 @@ int CMagiC::SendMousePosition(int x, int y)
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000SetExitImmediately();
 #else
-		m68k_StopExecution();
+		m68k_end_timeslice();
 #endif
 
 		OS_SetEvent(			// aufwecken, wenn in "idle task"
@@ -2553,7 +2570,7 @@ int CMagiC::SendMouseButton(unsigned int NumOfButton, bool bIsDown)
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000SetExitImmediately();
 #else
-		m68k_StopExecution();
+		m68k_end_timeslice();
 #endif
 
 		OS_SetEvent(			// aufwecken, wenn in "idle task"
@@ -2617,7 +2634,7 @@ int CMagiC::SendHz200( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000SetExitImmediately();
 #else
-		m68k_StopExecution();
+		m68k_end_timeslice();
 #endif
 
 		OS_SetEvent(			// aufwecken, wenn in "idle task"
@@ -2650,7 +2667,7 @@ int CMagiC::SendVBL( void )
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000SetExitImmediately();
 #else
-		m68k_StopExecution();
+		m68k_end_timeslice();
 #endif
 
 		OS_SetEvent(			// aufwecken, wenn in "idle task"
@@ -2769,7 +2786,7 @@ uint32_t CMagiC::AtariExec68k(uint32_t params, unsigned char *AdrOffset68k)
 #if defined(USE_ASGARD_PPC_68K_EMU)
 		Asgard68000SetExitImmediately();
 #else
-		m68k_StopExecution();
+		m68k_end_timeslice();
 #endif
 		return 0;
 	}
@@ -2815,7 +2832,7 @@ uint32_t CMagiC::AtariExec68k(uint32_t params, unsigned char *AdrOffset68k)
 	// 68k im PPC im 68k ausführen
 	m_bSpecialExec = true;
 	while(m_bSpecialExec)
-		m68k_execute();
+		m68k_execute(kMusashiTimesliceCycles);
 	// alles zurück
 	ret = m68k_get_reg(NULL, M68K_REG_D0);
 	(void) m68k_set_context(Old68kContext);
@@ -3198,7 +3215,7 @@ uint32_t CMagiC::AtariExit(uint32_t params, unsigned char *AdrOffset68k)
 * Perform Callbacks
 *
 **********************************************************************/
-uint32_t cmagic_hostcall(uint32_t func, uint32_t params, unsigned char *AdrOffset68k)
+extern "C" uint32_t cmagic_hostcall(uint32_t func, uint32_t params, unsigned char *AdrOffset68k)
 {
 	C_callback_func proc;
 

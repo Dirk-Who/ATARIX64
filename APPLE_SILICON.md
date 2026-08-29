@@ -56,7 +56,7 @@ lipo -info build/Build/Products/Release/AtariX.app/Contents/Frameworks/SDL2.fram
   target.
 - The Intel-only bundled SDL 2 framework can be replaced reproducibly with
   the official universal SDL 2.32.10 framework.
-- Version 0.4F supports resizable and fullscreen output with aspect-ratio
+- Version 0.5 supports resizable and fullscreen output with aspect-ratio
   preserving SDL logical scaling and corrected mouse coordinates. It also
   keeps native file-descriptor-to-drive state outside emulated RAM so writable
   mapped drives work reliably on 64-bit hosts. File permission and ownership

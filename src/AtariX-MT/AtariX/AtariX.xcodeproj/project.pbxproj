@@ -43,10 +43,8 @@
 		AD96C548143E4EEC008E0D68 /* XCmd.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AD96C53A143E4EEC008E0D68 /* XCmd.cpp */; };
 		AD96C54D143E4F56008E0D68 /* Debug.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AD96C54B143E4F56008E0D68 /* Debug.cpp */; };
 		AD98681C143D0E5E00E1D5B2 /* m68kcpu.c in Sources */ = {isa = PBXBuildFile; fileRef = AD986815143D0E5E00E1D5B2 /* m68kcpu.c */; };
-		AD98681D143D0E5E00E1D5B2 /* m68kopac.c in Sources */ = {isa = PBXBuildFile; fileRef = AD986817143D0E5E00E1D5B2 /* m68kopac.c */; };
-		AD98681E143D0E5E00E1D5B2 /* m68kopdm.c in Sources */ = {isa = PBXBuildFile; fileRef = AD986818143D0E5E00E1D5B2 /* m68kopdm.c */; };
-		AD98681F143D0E5E00E1D5B2 /* m68kopnz.c in Sources */ = {isa = PBXBuildFile; fileRef = AD986819143D0E5E00E1D5B2 /* m68kopnz.c */; };
 		AD986820143D0E5E00E1D5B2 /* m68kops.c in Sources */ = {isa = PBXBuildFile; fileRef = AD98681A143D0E5E00E1D5B2 /* m68kops.c */; };
+		DD6800010000000000000002 /* softfloat.c in Sources */ = {isa = PBXBuildFile; fileRef = DD6800020000000000000003 /* softfloat.c */; };
 		AD995129157167CE009CCE96 /* ApplicationIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = AD995128157167CE009CCE96 /* ApplicationIcon.png */; };
 		ADAF180A1572562500676157 /* MagicMacX.OS in Resources */ = {isa = PBXBuildFile; fileRef = ADAF18081572562400676157 /* MagicMacX.OS */; };
 		ADB9D2681A44EADC00B5CCED /* SDL2.framework in Copy Frameworks into .app bundle */ = {isa = PBXBuildFile; fileRef = ADB9D2671A44EADC00B5CCED /* SDL2.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -153,11 +151,12 @@
 		AD986814143D0E5E00E1D5B2 /* m68kconf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = m68kconf.h; sourceTree = "<group>"; };
 		AD986815143D0E5E00E1D5B2 /* m68kcpu.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = m68kcpu.c; sourceTree = "<group>"; };
 		AD986816143D0E5E00E1D5B2 /* m68kcpu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = m68kcpu.h; sourceTree = "<group>"; };
-		AD986817143D0E5E00E1D5B2 /* m68kopac.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = m68kopac.c; sourceTree = "<group>"; };
-		AD986818143D0E5E00E1D5B2 /* m68kopdm.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = m68kopdm.c; sourceTree = "<group>"; };
-		AD986819143D0E5E00E1D5B2 /* m68kopnz.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = m68kopnz.c; sourceTree = "<group>"; };
 		AD98681A143D0E5E00E1D5B2 /* m68kops.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = m68kops.c; sourceTree = "<group>"; };
 		AD98681B143D0E5E00E1D5B2 /* m68kops.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = m68kops.h; sourceTree = "<group>"; };
+		DD6800020000000000000001 /* m68kfpu.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = m68kfpu.c; sourceTree = "<group>"; };
+		DD6800020000000000000002 /* m68kmmu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = m68kmmu.h; sourceTree = "<group>"; };
+		DD6800020000000000000003 /* softfloat.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = softfloat/softfloat.c; sourceTree = "<group>"; };
+		DD6800020000000000000004 /* softfloat.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = softfloat/softfloat.h; sourceTree = "<group>"; };
 		AD995128157167CE009CCE96 /* ApplicationIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ApplicationIcon.png; sourceTree = "<group>"; };
 		ADAF1806157255BD00676157 /* de */ = {isa = PBXFileReference; lastKnownFileType = folder; name = de; path = de.lproj/rootfs; sourceTree = "<group>"; };
 		ADAF1807157255C200676157 /* fr */ = {isa = PBXFileReference; lastKnownFileType = folder; name = fr; path = fr.lproj/rootfs; sourceTree = "<group>"; };
@@ -361,11 +360,12 @@
 				AD986814143D0E5E00E1D5B2 /* m68kconf.h */,
 				AD986815143D0E5E00E1D5B2 /* m68kcpu.c */,
 				AD986816143D0E5E00E1D5B2 /* m68kcpu.h */,
-				AD986817143D0E5E00E1D5B2 /* m68kopac.c */,
-				AD986818143D0E5E00E1D5B2 /* m68kopdm.c */,
-				AD986819143D0E5E00E1D5B2 /* m68kopnz.c */,
 				AD98681A143D0E5E00E1D5B2 /* m68kops.c */,
 				AD98681B143D0E5E00E1D5B2 /* m68kops.h */,
+				DD6800020000000000000001 /* m68kfpu.c */,
+				DD6800020000000000000002 /* m68kmmu.h */,
+				DD6800020000000000000003 /* softfloat.c */,
+				DD6800020000000000000004 /* softfloat.h */,
 			);
 			name = m68k;
 			sourceTree = "<group>";
@@ -469,10 +469,8 @@
 				AD027A5E1429382D003CBB79 /* SDLMainIntro.m in Sources */,
 				8CE01DA72162604200770778 /* nf_base.cpp in Sources */,
 				AD98681C143D0E5E00E1D5B2 /* m68kcpu.c in Sources */,
-				AD98681D143D0E5E00E1D5B2 /* m68kopac.c in Sources */,
-				AD98681E143D0E5E00E1D5B2 /* m68kopdm.c in Sources */,
-				AD98681F143D0E5E00E1D5B2 /* m68kopnz.c in Sources */,
 				AD986820143D0E5E00E1D5B2 /* m68kops.c in Sources */,
+				DD6800010000000000000002 /* softfloat.c in Sources */,
 				8CD601B62162F83E00C6F5CB /* natfeat.cpp in Sources */,
 				AD96C53D143E4EEC008E0D68 /* Clipboard.cpp in Sources */,
 				AD96C53E143E4EEC008E0D68 /* Globals.cpp in Sources */,
@@ -596,7 +594,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kromke.AtariX;
 				PRODUCT_NAME = AtariX;
-				PROJECT_VERSION = 0.4F;
+				PROJECT_VERSION = 0.5;
 				SKIP_INSTALL = NO;
 				WRAPPER_EXTENSION = app;
 				ZERO_LINK = YES;
@@ -626,7 +624,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kromke.AtariX;
 				PRODUCT_NAME = AtariX;
-				PROJECT_VERSION = 0.4F;
+				PROJECT_VERSION = 0.5;
 				SKIP_INSTALL = NO;
 				WRAPPER_EXTENSION = app;
 			};
