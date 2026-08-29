@@ -1,0 +1,391 @@
+name: Import AtariX 0.5 Musashi update
+
+on:
+  push:
+    paths:
+      - .github/workflows/_temporary_musashi_update.yml
+
+permissions:
+  contents: write
+
+jobs:
+  arm64-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare pinned Musashi core
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="${RUNNER_TEMP}/Musashi"
+          git clone -q https://github.com/kstenerud/Musashi.git "$upstream"
+          git -C "$upstream" checkout -q 313ebf1bd9f4d0d93341eb5ce21fd8a119e9dbdd
+          test "$(git -C "$upstream" rev-parse HEAD)" = "313ebf1bd9f4d0d93341eb5ce21fd8a119e9dbdd"
+
+          python3 - "$upstream" <<'PY'
+          from pathlib import Path
+          import shutil, sys
+
+          upstream = Path(sys.argv[1])
+          root = Path.cwd()
+          dst = root / "src/AtariX-MT/AtariX"
+
+          for name in (
+              "m68k.h", "m68k_in.c", "m68kconf.h", "m68kcpu.c",
+              "m68kcpu.h", "m68kdasm.c", "m68kmake.c", "m68kmmu.h",
+              "m68kfpu.c",
+          ):
+              shutil.copy2(upstream / name, dst / name)
+          shutil.copytree(upstream / "softfloat", dst / "softfloat", dirs_exist_ok=True)
+          for name in ("m68kopac.c", "m68kopdm.c", "m68kopnz.c"):
+              (dst / name).unlink(missing_ok=True)
+
+          def replace(path, old, new):
+              p = root / path
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"expected text missing in {path}: {old[:80]!r}")
+              p.write_text(text.replace(old, new))
+
+          conf = "src/AtariX-MT/AtariX/m68kconf.h"
+          replace(conf, "#define M68K_EMULATE_030            M68K_OPT_ON",
+                        "#define M68K_EMULATE_030            M68K_OPT_OFF")
+          replace(conf, "#define M68K_EMULATE_040            M68K_OPT_ON",
+                        "#define M68K_EMULATE_040            M68K_OPT_OFF")
+          replace(conf, "#define M68K_EMULATE_INT_ACK        M68K_OPT_OFF",
+                        "#define M68K_EMULATE_INT_ACK        M68K_OPT_ON")
+          replace(conf, "#define M68K_EMULATE_TRACE          M68K_OPT_OFF",
+                        "#define M68K_EMULATE_TRACE          M68K_OPT_ON")
+          replace(conf, "#define M68K_EMULATE_PMMU           M68K_OPT_ON",
+                        "#define M68K_EMULATE_PMMU           M68K_OPT_OFF")
+          replace(conf, "#define M68K_USE_64_BIT             M68K_OPT_ON",
+                        "#define M68K_USE_64_BIT             M68K_OPT_OFF")
+
+          natfeat = "src/AtariX-MT/AtariX/natfeat.h"
+          replace(natfeat, "#define _NF_NATFEAT_H",
+              """#define _NF_NATFEAT_H
+
+          /* Current Musashi no longer exports the legacy INLINE macro. */
+          #ifndef INLINE
+          #define INLINE static inline
+          #endif""")
+
+          header = "src/AtariX-MT/AtariX/m68k.h"
+          replace(header, "void m68k_pulse_bus_error(void);",
+              """void m68k_pulse_bus_error(void);
+
+          /* AtariX extension used by the two MagicMac host-call opcodes. */
+          void m68k_set_atari_memory_base(unsigned char* base);
+          extern unsigned char* m68k_atari_memory_base;""")
+
+          cpu = "src/AtariX-MT/AtariX/m68kcpu.c"
+          replace(cpu, "m68ki_cpu_core m68ki_cpu = {0};",
+              """m68ki_cpu_core m68ki_cpu = {0};
+
+          /* AtariX guest-memory base for the MagicMac host-call opcode extension. */
+          unsigned char* m68k_atari_memory_base = NULL;""")
+          replace(cpu, """void m68k_pulse_bus_error(void)
+          {
+          	m68ki_exception_bus_error();
+          }""", """void m68k_pulse_bus_error(void)
+          {
+          	m68ki_exception_bus_error();
+          }
+
+          void m68k_set_atari_memory_base(unsigned char* base)
+          {
+          	m68k_atari_memory_base = base;
+          }""")
+          replace(cpu, "unsigned char* m68k_atari_memory_base = NULL;",
+              """unsigned char* m68k_atari_memory_base = NULL;
+
+          /* AtariX cross-thread stop request, checked at instruction boundaries. */
+          static volatile unsigned int m68k_atari_stop_requested = 0;""")
+          replace(cpu, "} while(GET_CYCLES() > 0);",
+                       "} while(GET_CYCLES() > 0 && !m68k_atari_stop_requested);")
+          replace(cpu, """	/* return how many clocks we used */
+          	return m68ki_initial_cycles - GET_CYCLES();""",
+              """	/* Consume the stop request handled by this invocation. */
+          	m68k_atari_stop_requested = 0;
+
+          	/* return how many clocks we used */
+          	return m68ki_initial_cycles - GET_CYCLES();""")
+          replace(cpu, """void m68k_end_timeslice(void)
+          {
+          	m68ki_initial_cycles -= GET_CYCLES();""",
+              """void m68k_end_timeslice(void)
+          {
+          	m68k_atari_stop_requested = 1;
+          	m68ki_initial_cycles -= GET_CYCLES();""")
+
+          inp = "src/AtariX-MT/AtariX/m68k_in.c"
+          replace(inp, """#include <stdio.h>
+          #include "m68kcpu.h"
+          extern void m68040_fpu_op0(void);""", """#include <stdio.h>
+          #include "m68kcpu.h"
+          #include <stdint.h>
+          extern void m68040_fpu_op0(void);""")
+          replace(inp, "extern void m68881_mmu_ops(void);",
+              """extern void m68881_mmu_ops(void);
+          extern uint32_t cmagic_hostcall(uint32_t func, uint32_t params,
+                                         unsigned char* atari_memory_base);""")
+          replace(inp, "callm     32  .     .     0000011011......  A..DXWLdx.  . . U U U   .   .  60  60  60  not properly emulated",
+              """callm     32  .     .     0000011011......  A..DXWLdx.  . . U U U   .   .  60  60  60  not properly emulated
+          call_emu_proc  0 .  .     0000000011000000  ..........  U U U U U   .   .   .   .   .  AtariX host call; conflicts with ColdFire bitrev.l d0
+          call_emu_cproc 0 .  .     0000000011000001  ..........  U U U U U   .   .   .   .   .  AtariX host call; conflicts with ColdFire bitrev.l d1""")
+          marker = """	m68ki_exception_illegal();
+          }
+
+
+          M68KMAKE_OP(cas, 8, ., .)"""
+          handlers = """	m68ki_exception_illegal();
+          }
+
+
+          /* AtariX/MagicMac host-call opcodes reserved by the guest kernel. */
+          M68KMAKE_OP(call_emu_proc, 0, ., .)
+          {
+          	uint32_t a0 = REG_A[0];
+          	uint32_t a1 = REG_A[1];
+          	uint32_t* function_slot = (uint32_t*)(m68k_atari_memory_base + a0);
+
+          	REG_D[0] = cmagic_hostcall(*function_slot, a1, m68k_atari_memory_base);
+          }
+
+
+          M68KMAKE_OP(call_emu_cproc, 0, ., .)
+          {
+          	uint32_t a0 = REG_A[0];
+          	uint32_t a1 = REG_A[1];
+          	uint32_t* function_slot = (uint32_t*)(m68k_atari_memory_base + a0);
+
+          	REG_D[0] = cmagic_hostcall(*function_slot, a1, m68k_atari_memory_base);
+          }
+
+
+          M68KMAKE_OP(cas, 8, ., .)"""
+          replace(inp, marker, handlers)
+
+          magic = "src/AtariX-MT/AtariX/MagiC.cpp"
+          replace(magic,
+              """		return(*((uint8_t*) (HostVideoAddr + (address - Adr68kVideo))));""",
+              """		address -= Adr68kVideo;
+          		if (bAtariVideoRamHostEndian)
+          			address ^= 3;
+          		return(*((uint8_t*) (HostVideoAddr + address)));""")
+          replace(magic,
+              """		val = *((uint16_t *) (HostVideoAddr + (address - Adr68kVideo)));""",
+              """		address -= Adr68kVideo;
+          		if (bAtariVideoRamHostEndian)
+          			address ^= 2;
+          		val = *((uint16_t *) (HostVideoAddr + address));""")
+          replace(magic,
+              """		address -= Adr68kVideo;
+          		*((uint8_t *) (HostVideoAddr + address)) = (uint8_t) value;""",
+              """		address -= Adr68kVideo;
+          		if (bAtariVideoRamHostEndian)
+          			address ^= 3;
+          		*((uint8_t *) (HostVideoAddr + address)) = (uint8_t) value;""")
+          replace(magic,
+              """		address -= Adr68kVideo;
+          		if (bAtariVideoRamHostEndian)
+          			*((uint16_t *) (HostVideoAddr + address)) = (uint16_t) value;""",
+              """		address -= Adr68kVideo;
+          		if (bAtariVideoRamHostEndian)
+          			address ^= 2;
+          		if (bAtariVideoRamHostEndian)
+          			*((uint16_t *) (HostVideoAddr + address)) = (uint16_t) value;""")
+          replace(magic, '#include "m68kcpu.h"', '#include "m68kcpu.h"\n\nstatic const int kMusashiTimesliceCycles = 1000000;')
+          replace(magic, """	m68k_SetBaseAddr(m_RAM68k);
+          	m68k_SetHiMem((memptr)m_RAM68ksize);""", "	m68k_set_atari_memory_base(m_RAM68k);")
+          replace(magic, "m68k_execute();", "m68k_execute(kMusashiTimesliceCycles);")
+          replace(magic, "m68k_StopExecution();", "m68k_end_timeslice();")
+          replace(magic, "m68k_exception_bus_error();", "m68k_pulse_bus_error();")
+          replace(magic, """void CMagiC::SendBusError(uint32_t addr, const char *AccessMode)
+          {
+          #if defined(USE_ASGARD_PPC_68K_EMU)
+          	Asgard68000SetExitImmediately();
+          #else
+          	m68k_end_timeslice();
+          #endif
+          	m_bBusErrorPending = true;
+          	m_BusErrorAddress = addr;
+          	strcpy(m_BusErrorAccessMode, AccessMode);
+          }""", """void CMagiC::SendBusError(uint32_t addr, const char *AccessMode)
+          {
+          	m_BusErrorAddress = addr;
+          	strcpy(m_BusErrorAccessMode, AccessMode);
+
+          #if defined(USE_ASGARD_PPC_68K_EMU)
+          	Asgard68000SetExitImmediately();
+          	m_bBusErrorPending = true;
+          #else
+          	/*
+          	 * Musashi's bus-error handler longjmps to the trap installed by
+          	 * the active m68k_execute() call.  Raise it before that call
+          	 * returns; deferring it corrupts the host caller's stack frame.
+          	 */
+          	m68k_pulse_bus_error();
+          #endif
+          }""")
+          replace(magic, "m68k_clear_irq(IRQLine);", "m68k_set_irq(M68K_IRQ_NONE);")
+          replace(magic, "uint32_t cmagic_hostcall(uint32_t func, uint32_t params, unsigned char *AdrOffset68k)",
+              'extern "C" uint32_t cmagic_hostcall(uint32_t func, uint32_t params, unsigned char *AdrOffset68k)')
+
+          pbx = root / "src/AtariX-MT/AtariX/AtariX.xcodeproj/project.pbxproj"
+          text = pbx.read_text()
+          text = "\n".join(line for line in text.splitlines()
+                           if not any(name in line for name in ("m68kopac.c", "m68kopdm.c", "m68kopnz.c"))) + "\n"
+          text = text.replace(
+              "		AD986820143D0E5E00E1D5B2 /* m68kops.c in Sources */ = {isa = PBXBuildFile; fileRef = AD98681A143D0E5E00E1D5B2 /* m68kops.c */; };",
+              "		AD986820143D0E5E00E1D5B2 /* m68kops.c in Sources */ = {isa = PBXBuildFile; fileRef = AD98681A143D0E5E00E1D5B2 /* m68kops.c */; };\n"
+              "		DD6800010000000000000002 /* softfloat.c in Sources */ = {isa = PBXBuildFile; fileRef = DD6800020000000000000003 /* softfloat.c */; };")
+          text = text.replace(
+              "		AD98681B143D0E5E00E1D5B2 /* m68kops.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = m68kops.h; sourceTree = \"<group>\"; };",
+              "		AD98681B143D0E5E00E1D5B2 /* m68kops.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = m68kops.h; sourceTree = \"<group>\"; };\n"
+              "		DD6800020000000000000001 /* m68kfpu.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = m68kfpu.c; sourceTree = \"<group>\"; };\n"
+              "		DD6800020000000000000002 /* m68kmmu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = m68kmmu.h; sourceTree = \"<group>\"; };\n"
+              "		DD6800020000000000000003 /* softfloat.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = softfloat/softfloat.c; sourceTree = \"<group>\"; };\n"
+              "		DD6800020000000000000004 /* softfloat.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = softfloat/softfloat.h; sourceTree = \"<group>\"; };")
+          text = text.replace(
+              "				AD98681B143D0E5E00E1D5B2 /* m68kops.h */,",
+              "				AD98681B143D0E5E00E1D5B2 /* m68kops.h */,\n"
+              "				DD6800020000000000000001 /* m68kfpu.c */,\n"
+              "				DD6800020000000000000002 /* m68kmmu.h */,\n"
+              "				DD6800020000000000000003 /* softfloat.c */,\n"
+              "				DD6800020000000000000004 /* softfloat.h */,")
+          text = text.replace(
+              "				AD986820143D0E5E00E1D5B2 /* m68kops.c in Sources */,",
+              "				AD986820143D0E5E00E1D5B2 /* m68kops.c in Sources */,\n"
+              "				DD6800010000000000000002 /* softfloat.c in Sources */,")
+          pbx.write_text(text)
+
+          replace("src/AtariX-MT/AtariX/config.h",
+                  '#define VERSION_STRING "0.4"',
+                  '#define VERSION_STRING "0.5"')
+
+          pbx_text = pbx.read_text()
+          if "PROJECT_VERSION = 0.4F;" not in pbx_text:
+              raise SystemExit("PROJECT_VERSION 0.4F missing")
+          pbx.write_text(pbx_text.replace("PROJECT_VERSION = 0.4F;",
+                                          "PROJECT_VERSION = 0.5;"))
+
+          readme = root / "README.md"
+          readme_text = readme.read_text()
+          readme_text = readme_text.replace(
+              "* Musashi emulator sources must be synchronised with latest version (see below).\n", "")
+          license_line = "License: https://github.com/kstenerud/Musashi/blob/master/readme.txt  "
+          if "[MUSASHI.md]" not in readme_text:
+              if license_line not in readme_text:
+                  raise SystemExit("Musashi license marker missing in README.md")
+              readme_text = readme_text.replace(
+                  license_line,
+                  license_line + "\nIntegrated upstream revision and AtariX-specific extensions: [MUSASHI.md](MUSASHI.md)")
+          readme.write_text(readme_text)
+
+          apple_doc = root / "APPLE_SILICON.md"
+          apple_text = apple_doc.read_text()
+          apple_doc.write_text(apple_text.replace(
+              "Version 0.4F supports resizable and fullscreen output",
+              "Version 0.5 supports resizable and fullscreen output"))
+
+          (root / "MUSASHI.md").write_text("""# Musashi integration
+
+AtariX 0.5 uses the Musashi 680x0 emulator from:
+
+- Repository: https://github.com/kstenerud/Musashi
+- Upstream branch: master
+- Upstream commit: 313ebf1bd9f4d0d93341eb5ce21fd8a119e9dbdd
+- Upstream commit date: 2026-03-08
+
+The generated opcode sources report Musashi generator version 4.60. Some
+upstream source headers retain historical version labels; the pinned commit
+above is the authoritative identifier for this import.
+
+## AtariX-specific integration
+
+AtariX continues to emulate an MC68020 and preserves the MagicMac host-call
+opcodes 0x00c0 and 0x00c1. They are generated from m68k_in.c together with
+the upstream opcode table.
+
+For compatibility with the former AtariX core, M68K_USE_64_BIT remains
+disabled. A dedicated cross-thread stop flag preserves instruction-boundary
+handling of mouse, timer and VBL events.
+
+Bus errors are raised synchronously while Musashi's active execution trap is
+valid. Deferring them until after m68k_execute() returns would jump into an
+expired stack frame on ARM64.
+
+The 32-bit macOS framebuffer uses native little-endian pixel storage. AtariX
+maps 68k byte accesses with address XOR 3 and word accesses with address XOR 2;
+longword accesses remain unchanged. This preserves all colour channels during
+MagiC raster operations and window movement.
+
+## Regenerating opcode sources
+
+From the AtariX source directory:
+
+    cc -O2 -o m68kmake-host m68kmake.c
+    ./m68kmake-host . m68k_in.c
+    rm m68kmake-host
+""")
+
+          apple_workflow = root / ".github/workflows/apple-silicon.yml"
+          apple_workflow_text = apple_workflow.read_text()
+          if "AtariX-0.5-Apple-Silicon.zip" not in apple_workflow_text:
+              apple_workflow_text += """
+      - name: Package AtariX 0.5
+        run: |
+          APP="$RUNNER_TEMP/AtariXDerivedData/Build/Products/Release/AtariX.app"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$RUNNER_TEMP/AtariX-0.5-Apple-Silicon.zip"
+
+      - name: Commit AtariX 0.5 source update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Release AtariX 0.5 with updated Musashi core"
+          git push origin HEAD:main
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AtariX-0.5-Apple-Silicon
+          path: ${{ runner.temp }}/AtariX-0.5-Apple-Silicon.zip
+          if-no-files-found: error
+"""
+          apple_workflow.write_text(apple_workflow_text)
+          PY
+
+          cd src/AtariX-MT/AtariX
+          cc -O2 -o "${RUNNER_TEMP}/m68kmake" m68kmake.c
+          "${RUNNER_TEMP}/m68kmake" . m68k_in.c
+          cd ../../..
+
+      - name: Install universal SDL2 framework
+        run: bash ./scripts/bootstrap-sdl2.sh
+
+      - name: Build unsigned arm64 test application
+        run: |
+          xcodebuild \
+            -project src/AtariX-MT/AtariX/AtariX.xcodeproj \
+            -scheme AtariX-Application \
+            -configuration Release \
+            -derivedDataPath "${RUNNER_TEMP}/AtariXDerivedData" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Verify and package
+        run: |
+          APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
+          lipo -info "${APP}/Contents/MacOS/AtariX"
+          lipo -info "${APP}/Contents/Frameworks/SDL2.framework/SDL2"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "${RUNNER_TEMP}/AtariX-0.5-Apple-Silicon.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AtariX-0.5-Apple-Silicon
+          path: ${{ runner.temp }}/AtariX-0.5-Apple-Silicon.zip
+          if-no-files-found: error
