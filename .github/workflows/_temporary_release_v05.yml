@@ -1,0 +1,48 @@
+name: Publish AtariX 0.5 release
+
+on:
+  push:
+    paths:
+      - .github/workflows/_temporary_release_v05.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: AtariX-0.5-Apple-Silicon
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: Dirk-Who/ATARIX64
+          run-id: 33279787651
+          path: release
+
+      - name: Verify release archive
+        run: |
+          test -s release/AtariX-0.5-Apple-Silicon.zip
+          sha256sum release/AtariX-0.5-Apple-Silicon.zip
+
+      - name: Create GitHub Release v0.5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v0.5 release/AtariX-0.5-Apple-Silicon.zip \
+            --repo Dirk-Who/ATARIX64 \
+            --target 9d989b4475c1b249a3bfe1f05ff724ff5909d647 \
+            --title "AtariX 0.5" \
+            --notes "Apple-Silicon-Version von AtariX 0.5.
+
+Enthalten:
+- aktualisierter Musashi-680x0-Kern, festgelegt auf Upstream-Commit 313ebf1bd9f4d0d93341eb5ce21fd8a119e9dbdd
+- erhaltene MagicMac-Hostcall-Opcodes 0x00c0 und 0x00c1
+- ARM64-Korrektur für synchrone Busfehler
+- korrigierte Byte- und Word-Adressierung des Framebuffers
+- getesteter macOS-15-ARM64-Build mit universellem SDL2-Framework
+
+Die Anwendung ist nicht mit einem Apple-Entwicklerzertifikat signiert. Falls macOS sie nach dem Download blockiert, kann die Quarantäne-Markierung lokal mit folgendem Befehl entfernt werden:
+
+xattr -dr com.apple.quarantine AtariX.app"
