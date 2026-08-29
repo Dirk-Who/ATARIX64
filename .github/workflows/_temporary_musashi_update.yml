@@ -331,22 +331,6 @@ jobs:
               rm m68kmake-host
           """)
 
-          apple_workflow = root / ".github/workflows/apple-silicon.yml"
-          apple_workflow_text = apple_workflow.read_text()
-          if "AtariX-0.5-Apple-Silicon.zip" not in apple_workflow_text:
-              apple_workflow_text += (
-                  "\n      - name: Package AtariX 0.5\n"
-                  "        run: |\n"
-                  "          APP=\"$RUNNER_TEMP/AtariXDerivedData/Build/Products/Release/AtariX.app\"\n"
-                  "          ditto -c -k --sequesterRsrc --keepParent \"$APP\" \"$RUNNER_TEMP/AtariX-0.5-Apple-Silicon.zip\"\n"
-                  "\n"
-                  "      - uses: actions/upload-artifact@v4\n"
-                  "        with:\n"
-                  "          name: AtariX-0.5-Apple-Silicon\n"
-                  "          path: ${{ runner.temp }}/AtariX-0.5-Apple-Silicon.zip\n"
-                  "          if-no-files-found: error\n"
-              )
-          apple_workflow.write_text(apple_workflow_text)
           PY
 
           cd src/AtariX-MT/AtariX
