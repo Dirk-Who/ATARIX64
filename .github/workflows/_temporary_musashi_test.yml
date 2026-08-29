@@ -60,6 +60,15 @@ jobs:
           replace(conf, "#define M68K_EMULATE_PMMU           M68K_OPT_ON",
                         "#define M68K_EMULATE_PMMU           M68K_OPT_OFF")
 
+          natfeat = "src/AtariX-MT/AtariX/natfeat.h"
+          replace(natfeat, "#define _NF_NATFEAT_H",
+              """#define _NF_NATFEAT_H
+
+          /* Current Musashi no longer exports the legacy INLINE macro. */
+          #ifndef INLINE
+          #define INLINE static inline
+          #endif""")
+
           header = "src/AtariX-MT/AtariX/m68k.h"
           replace(header, "void m68k_pulse_bus_error(void);",
               """void m68k_pulse_bus_error(void);
