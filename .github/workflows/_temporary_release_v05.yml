@@ -34,15 +34,4 @@ jobs:
             --repo Dirk-Who/ATARIX64 \
             --target 9d989b4475c1b249a3bfe1f05ff724ff5909d647 \
             --title "AtariX 0.5" \
-            --notes "Apple-Silicon-Version von AtariX 0.5.
-
-Enthalten:
-- aktualisierter Musashi-680x0-Kern, festgelegt auf Upstream-Commit 313ebf1bd9f4d0d93341eb5ce21fd8a119e9dbdd
-- erhaltene MagicMac-Hostcall-Opcodes 0x00c0 und 0x00c1
-- ARM64-Korrektur für synchrone Busfehler
-- korrigierte Byte- und Word-Adressierung des Framebuffers
-- getesteter macOS-15-ARM64-Build mit universellem SDL2-Framework
-
-Die Anwendung ist nicht mit einem Apple-Entwicklerzertifikat signiert. Falls macOS sie nach dem Download blockiert, kann die Quarantäne-Markierung lokal mit folgendem Befehl entfernt werden:
-
-xattr -dr com.apple.quarantine AtariX.app"
+            --notes "Apple-Silicon-Version von AtariX 0.5. Enthalten sind der aktualisierte Musashi-680x0-Kern (Upstream-Commit 313ebf1bd9f4d0d93341eb5ce21fd8a119e9dbdd), die MagicMac-Hostcall-Opcodes 0x00c0 und 0x00c1, die ARM64-Korrektur für synchrone Busfehler und die korrigierte Framebuffer-Adressierung. Erfolgreich unter macOS 15 für ARM64 gebaut; SDL2 ist universal. Die App ist nicht mit einem Apple-Entwicklerzertifikat signiert. Falls macOS sie blockiert: xattr -dr com.apple.quarantine AtariX.app"
