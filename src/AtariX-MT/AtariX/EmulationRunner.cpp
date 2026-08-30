@@ -165,6 +165,16 @@ void EmulationRunner::Init(void)
 
 	m_counter = 0;
 
+	/*
+	 * Fullscreen uses relative mouse input. Keep SDL from scaling integer
+	 * deltas before AtariX can accumulate them with sub-pixel precision, and
+	 * retain the familiar macOS pointer acceleration curve.
+	 */
+	if (!SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SCALING, "0"))
+		DebugWarning("Could not disable SDL relative renderer scaling");
+	if (!SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "1"))
+		DebugWarning("Could not enable macOS relative mouse acceleration");
+
 	// we do not want SDL to catch events like SIGSEGV
 	ret = SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE);
 	assert(!ret);
