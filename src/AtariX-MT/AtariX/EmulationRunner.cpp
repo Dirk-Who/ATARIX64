@@ -59,11 +59,9 @@ static void AtariX_ReleaseMouseConfinement(SDL_Window *window)
 
 	/*
 	 * SDL/macOS can retain the confinement rectangle from the windowed
-	 * Cocoa view while entering a fullscreen Space.  Clear every public
-	 * form of mouse confinement explicitly; AtariX uses absolute mouse
-	 * coordinates and does not require a grabbed or relative pointer.
+	 * Cocoa view while entering a fullscreen Space. Clear the window grabs
+	 * before the new relative fullscreen mode is enabled.
 	 */
-	SDL_SetRelativeMouseMode(SDL_FALSE);
 	SDL_SetWindowGrab(window, SDL_FALSE);
 #if SDL_VERSION_ATLEAST(2, 0, 16)
 	SDL_SetWindowMouseGrab(window, SDL_FALSE);
@@ -80,8 +78,6 @@ static void AtariX_RefreshWindowGeometry
 {
 	if (!window || !renderer)
 		return;
-
-	AtariX_ReleaseMouseConfinement(window);
 
 	/*
 	 * Remove a stale mouse rectangle left behind by a window/fullscreen
@@ -135,6 +131,9 @@ EmulationRunner::EmulationRunner(void)
 	m_atariScreenH = 768;
 	m_atariScreenStretchX = m_atariScreenStretchY = false;
 	m_atariHideHostMouse = false;
+	m_relativeMouseMode = false;
+	m_virtualMouseX = (float) (m_atariScreenW - 1) / 2.0f;
+	m_virtualMouseY = (float) (m_atariScreenH - 1) / 2.0f;
 	screenbitsperpixel = 32;
 }
 
@@ -242,6 +241,8 @@ void EmulationRunner::Config
 
 	m_atariScreenStretchX = atariScreenStretchX;
 	m_atariScreenStretchY = atariScreenStretchY;
+	m_virtualMouseX = (float) (m_atariScreenW - 1) / 2.0f;
+	m_virtualMouseY = (float) (m_atariScreenH - 1) / 2.0f;
 	m_atariHideHostMouse = atariHideHostMouse;
 	DebugInfo("%s(): atariHideHostMouse(%u)", __func__, m_atariHideHostMouse);
 
@@ -1067,7 +1068,8 @@ void EmulationRunner::_OpenWindow(void)
 void EmulationRunner::_CloseWindow(void)
 {
 	DebugTrace("%s()", __func__);
-	// Never leave the macOS pointer hidden after the emulation window closes.
+	// Never leave the macOS pointer captured or hidden after closing.
+	_SetRelativeMouseMode(false);
 	SDL_ShowCursor(SDL_ENABLE);
 	if (m_sdl_window)
 	{
@@ -1109,6 +1111,66 @@ void EmulationRunner::_CloseWindow(void)
  *
  *********************************************************************************************************/
 
+static bool AtariX_WindowCoversDisplay(SDL_Window *window)
+{
+	if (!window)
+		return false;
+
+	const int displayIndex = SDL_GetWindowDisplayIndex(window);
+	SDL_Rect displayBounds;
+	int windowW = 0;
+	int windowH = 0;
+	if (displayIndex < 0 || SDL_GetDisplayBounds(displayIndex, &displayBounds) != 0)
+		return false;
+
+	SDL_GetWindowSize(window, &windowW, &windowH);
+	return
+		windowW * 100 >= displayBounds.w * 90 &&
+		windowH * 100 >= displayBounds.h * 90;
+}
+
+
+void EmulationRunner::_SetRelativeMouseMode(bool enable)
+{
+	if (m_relativeMouseMode == enable)
+		return;
+
+	if (SDL_SetRelativeMouseMode(enable ? SDL_TRUE : SDL_FALSE) != 0)
+	{
+		DebugError("SDL_SetRelativeMouseMode(%d): %s", enable, SDL_GetError());
+		return;
+	}
+
+	m_relativeMouseMode = enable;
+	if (!enable)
+		AtariX_ReleaseMouseConfinement(m_sdl_window);
+	else
+		SDL_FlushEvent(SDL_MOUSEMOTION);
+
+	DebugInfo("fullscreen relative mouse: %s", enable ? "enabled" : "disabled");
+}
+
+
+void EmulationRunner::_UpdateFullscreenMouseMode(void)
+{
+	if (!m_sdl_window)
+	{
+		_SetRelativeMouseMode(false);
+		return;
+	}
+
+	const Uint32 flags = SDL_GetWindowFlags(m_sdl_window);
+	const bool hasFocus = (flags & SDL_WINDOW_INPUT_FOCUS) != 0;
+
+	/*
+	 * Enable relative input only after Cocoa has actually expanded the view.
+	 * Waiting for the fullscreen-sized window avoids SDL confining the pointer
+	 * to the rectangle that existed before the transition.
+	 */
+	_SetRelativeMouseMode(hasFocus && AtariX_WindowCoversDisplay(m_sdl_window));
+}
+
+
 void EmulationRunner::_UpdateHostCursorVisibility(void)
 {
 	if (!m_sdl_window)
@@ -1120,36 +1182,11 @@ void EmulationRunner::_UpdateHostCursorVisibility(void)
 	const Uint32 flags = SDL_GetWindowFlags(m_sdl_window);
 	const bool hasFocus = (flags & SDL_WINDOW_INPUT_FOCUS) != 0;
 	const bool isFullscreen = (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
-
-	/*
-	 * The macOS green window button enters a native fullscreen Space. SDL 2
-	 * does not always set SDL_WINDOW_FULLSCREEN_DESKTOP for that transition,
-	 * so also recognise a window that covers virtually the entire display.
-	 */
-	bool coversDisplay = false;
-	const int displayIndex = SDL_GetWindowDisplayIndex(m_sdl_window);
-	SDL_Rect displayBounds;
-	int windowW = 0;
-	int windowH = 0;
-	if (displayIndex >= 0 && SDL_GetDisplayBounds(displayIndex, &displayBounds) == 0)
-	{
-		SDL_GetWindowSize(m_sdl_window, &windowW, &windowH);
-		coversDisplay =
-			windowW * 100 >= displayBounds.w * 90 &&
-			windowH * 100 >= displayBounds.h * 90;
-	}
-
-	const bool effectiveFullscreen = isFullscreen || coversDisplay;
+	const bool effectiveFullscreen =
+		isFullscreen || AtariX_WindowCoversDisplay(m_sdl_window);
 	const bool hideHostCursor =
 		hasFocus && (m_atariHideHostMouse || effectiveFullscreen);
 
-	/*
-	 * Cocoa may reapply its old confinement late in a native fullscreen
-	 * transition. This function is also called on mouse motion, so clearing
-	 * it here covers both SDL fullscreen and the green macOS window button.
-	 */
-	if (effectiveFullscreen)
-		AtariX_ReleaseMouseConfinement(m_sdl_window);
 	SDL_ShowCursor(hideHostCursor ? SDL_DISABLE : SDL_ENABLE);
 }
 
@@ -1170,6 +1207,7 @@ void EmulationRunner::_ToggleFullscreen(void)
 	const Uint32 newMode = isFullscreen ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP;
 
 	/* Release the old Cocoa confinement before its content view is resized. */
+	_SetRelativeMouseMode(false);
 	AtariX_ReleaseMouseConfinement(m_sdl_window);
 	if (SDL_SetWindowFullscreen(m_sdl_window, newMode) != 0)
 	{
@@ -1324,6 +1362,8 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 						(int) m_hostScreenH);
 					atomic_exchange(&m_Emulator.bVideoBufChanged, 1);
 					m_initiallyVisible = true;
+					AtariX_ReleaseMouseConfinement(m_sdl_window);
+					_UpdateFullscreenMouseMode();
 					_UpdateHostCursorVisibility();
 					break;
 
@@ -1332,7 +1372,8 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 					break;
 
 				case SDL_WINDOWEVENT_LEAVE:
-					SDL_ShowCursor(SDL_ENABLE);
+					if (!m_relativeMouseMode)
+						SDL_ShowCursor(SDL_ENABLE);
 					break;
 					
 				case SDL_WINDOWEVENT_FOCUS_GAINED:
@@ -1349,6 +1390,7 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 					}
 					// Now catch keyboard events
 					AtariX_EnableKeyboardEvents(true);
+					_UpdateFullscreenMouseMode();
 					_UpdateHostCursorVisibility();
 					break;
 					
@@ -1364,6 +1406,7 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 					// No longer catch keyboard events
 					AtariX_EnableKeyboardEvents(false);
 					// The host pointer must be usable in other macOS windows.
+					_SetRelativeMouseMode(false);
 					SDL_ShowCursor(SDL_ENABLE);
 					break;
 			}
@@ -1412,34 +1455,72 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 		case SDL_MOUSEMOTION:
 		{
 			const SDL_MouseMotionEvent *ev = (SDL_MouseMotionEvent *) &event;
-			// Native macOS fullscreen can re-show the host cursor during a
-			// Space transition. Re-apply the correct state on mouse movement.
 			_UpdateHostCursorVisibility();
 #if 0
 			DebugInfo("mouse motion x = %d, y = %d, xrel = %d, yrel = %d", ev->x, ev->y, ev->xrel, ev->yrel);
 #endif
-			float logicalX = (float) ev->x;
-			float logicalY = (float) ev->y;
-			if (m_sdl_renderer)
-				SDL_RenderWindowToLogical(m_sdl_renderer, ev->x, ev->y, &logicalX, &logicalY);
-			int x = (int) logicalX;
-			int y = (int) logicalY;
-			if (m_atariScreenStretchX)
-				x /= 2;
-			if (m_atariScreenStretchY)
-				y /= 2;
-			if (x < 0)
-				x = 0;
-			else if (x >= (int) m_atariScreenW)
-				x = (int) m_atariScreenW - 1;
-			if (y < 0)
-				y = 0;
-			else if (y >= (int) m_atariScreenH)
-				y = (int) m_atariScreenH - 1;
-			m_Emulator.SendMousePosition(x, y);
+			if (m_relativeMouseMode)
+			{
+				/*
+				 * In fullscreen, use motion deltas rather than Cocoa's absolute
+				 * window coordinates. The latter can remain limited to the old
+				 * pre-fullscreen content rectangle on macOS.
+				 */
+				float logicalOriginX = 0.0f;
+				float logicalOriginY = 0.0f;
+				float logicalDeltaX = (float) ev->xrel;
+				float logicalDeltaY = (float) ev->yrel;
+				if (m_sdl_renderer)
+				{
+					float logicalEndX = 0.0f;
+					float logicalEndY = 0.0f;
+					SDL_RenderWindowToLogical(
+						m_sdl_renderer, 0, 0,
+						&logicalOriginX, &logicalOriginY);
+					SDL_RenderWindowToLogical(
+						m_sdl_renderer, ev->xrel, ev->yrel,
+						&logicalEndX, &logicalEndY);
+					logicalDeltaX = logicalEndX - logicalOriginX;
+					logicalDeltaY = logicalEndY - logicalOriginY;
+				}
+				if (m_atariScreenStretchX)
+					logicalDeltaX /= 2.0f;
+				if (m_atariScreenStretchY)
+					logicalDeltaY /= 2.0f;
+				m_virtualMouseX += logicalDeltaX;
+				m_virtualMouseY += logicalDeltaY;
+			}
+			else
+			{
+				float logicalX = (float) ev->x;
+				float logicalY = (float) ev->y;
+				if (m_sdl_renderer)
+					SDL_RenderWindowToLogical(
+						m_sdl_renderer, ev->x, ev->y,
+						&logicalX, &logicalY);
+				if (m_atariScreenStretchX)
+					logicalX /= 2.0f;
+				if (m_atariScreenStretchY)
+					logicalY /= 2.0f;
+				m_virtualMouseX = logicalX;
+				m_virtualMouseY = logicalY;
+			}
+
+			if (m_virtualMouseX < 0.0f)
+				m_virtualMouseX = 0.0f;
+			else if (m_virtualMouseX > (float) (m_atariScreenW - 1))
+				m_virtualMouseX = (float) (m_atariScreenW - 1);
+			if (m_virtualMouseY < 0.0f)
+				m_virtualMouseY = 0.0f;
+			else if (m_virtualMouseY > (float) (m_atariScreenH - 1))
+				m_virtualMouseY = (float) (m_atariScreenH - 1);
+
+			m_Emulator.SendMousePosition(
+				(int) (m_virtualMouseX + 0.5f),
+				(int) (m_virtualMouseY + 0.5f));
 		}
 			break;
-			
+		
 		case SDL_MOUSEBUTTONDOWN:
 		case SDL_MOUSEBUTTONUP:
 		{
