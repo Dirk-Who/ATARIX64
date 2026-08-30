@@ -52,6 +52,24 @@ static void AtariX_EnableKeyboardEvents(bool enable)
  * after every effective window-size change so mouse events use the new
  * fullscreen area instead of the previous window rectangle.
  */
+static void AtariX_ReleaseMouseConfinement(SDL_Window *window)
+{
+	if (!window)
+		return;
+
+	/*
+	 * SDL/macOS can retain the confinement rectangle from the windowed
+	 * Cocoa view while entering a fullscreen Space.  Clear every public
+	 * form of mouse confinement explicitly; AtariX uses absolute mouse
+	 * coordinates and does not require a grabbed or relative pointer.
+	 */
+	SDL_SetRelativeMouseMode(SDL_FALSE);
+	SDL_SetWindowGrab(window, SDL_FALSE);
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+	SDL_SetWindowMouseGrab(window, SDL_FALSE);
+#endif
+}
+
 static void AtariX_RefreshWindowGeometry
 (
 	SDL_Window *window,
@@ -62,6 +80,8 @@ static void AtariX_RefreshWindowGeometry
 {
 	if (!window || !renderer)
 		return;
+
+	AtariX_ReleaseMouseConfinement(window);
 
 	/*
 	 * Remove a stale mouse rectangle left behind by a window/fullscreen
@@ -1119,8 +1139,17 @@ void EmulationRunner::_UpdateHostCursorVisibility(void)
 			windowH * 100 >= displayBounds.h * 90;
 	}
 
+	const bool effectiveFullscreen = isFullscreen || coversDisplay;
 	const bool hideHostCursor =
-		hasFocus && (m_atariHideHostMouse || isFullscreen || coversDisplay);
+		hasFocus && (m_atariHideHostMouse || effectiveFullscreen);
+
+	/*
+	 * Cocoa may reapply its old confinement late in a native fullscreen
+	 * transition. This function is also called on mouse motion, so clearing
+	 * it here covers both SDL fullscreen and the green macOS window button.
+	 */
+	if (effectiveFullscreen)
+		AtariX_ReleaseMouseConfinement(m_sdl_window);
 	SDL_ShowCursor(hideHostCursor ? SDL_DISABLE : SDL_ENABLE);
 }
 
@@ -1139,6 +1168,9 @@ void EmulationRunner::_ToggleFullscreen(void)
 	const Uint32 flags = SDL_GetWindowFlags(m_sdl_window);
 	const bool isFullscreen = (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
 	const Uint32 newMode = isFullscreen ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP;
+
+	/* Release the old Cocoa confinement before its content view is resized. */
+	AtariX_ReleaseMouseConfinement(m_sdl_window);
 	if (SDL_SetWindowFullscreen(m_sdl_window, newMode) != 0)
 	{
 		DebugError("SDL_SetWindowFullscreen: %s", SDL_GetError());
