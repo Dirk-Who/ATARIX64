@@ -26,11 +26,13 @@
 #include "EmulationRunner.h"
 #include "m68k.h"
 #include "nf_objs.h"
+#include <atomic>
 
 
 
 static int s_EmulationIsInit = 0;
 static int s_EmulationIsRunning = 0;
+static std::atomic_bool s_HostExitRequested(false);
 static EmulationRunner theEmulation;
 
 
@@ -90,6 +92,27 @@ void EmulationRun(void)
 void EmulationRunSdl(void)
 {
 	theEmulation.EventLoop();
+}
+
+void EmulationRequestHostExit(void)
+{
+	/*
+	 * MagiC calls this from the 68k worker thread. Wake the SDL event
+	 * pump so AppDelegate can finish the shutdown on the Cocoa main thread.
+	 */
+	s_HostExitRequested.store(true);
+
+	SDL_Event event;
+	SDL_zero(event);
+	event.type = SDL_USEREVENT;
+	event.user.code = QUIT_HOST_APPLICATION;
+	if (SDL_PushEvent(&event) != 1)
+		DebugError("EmulationRequestHostExit() -- SDL_PushEvent failed: %s", SDL_GetError());
+}
+
+int EmulationHostExitRequested(void)
+{
+	return s_HostExitRequested.exchange(false) ? 1 : 0;
 }
 
 void EmulationStop(void)

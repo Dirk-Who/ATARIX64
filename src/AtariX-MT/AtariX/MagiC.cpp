@@ -31,6 +31,7 @@
 #include "Globals.h"
 #include "MagiC.h"
 #include "Atari.h"
+#include "EmulationMain.h"
 //#include "Dialogue68kExc.h"
 //#include "DialogueSysHalt.h"
 #include "missing.h"
@@ -3189,6 +3190,14 @@ uint32_t CMagiC::AtariExit(uint32_t params, unsigned char *AdrOffset68k)
 	OS_SetEvent(
 			pTheMagiC->m_Event,
 			EMU_EVNT_TERM);
+
+	/*
+	 * The guest requested a real power-off. Stopping only the 68k thread
+	 * leaves the Cocoa application open with a frozen Atari screen.
+	 * Forward the request to the host event loop, which will terminate the
+	 * macOS application on its main thread.
+	 */
+	EmulationRequestHostExit();
 
 #ifdef MAGICMACX_DEBUG68K
 	for	(int i = 0; i < 100; i++)

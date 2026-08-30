@@ -129,3 +129,4 @@ const int RUN_EMULATOR = 3;
 const int STOP_EMULATOR = 4;
 const int CLOSE_EMULATOR_WINDOW = 5;
 const int TOGGLE_EMULATOR_FULLSCREEN = 6;
+const int QUIT_HOST_APPLICATION = 7;
