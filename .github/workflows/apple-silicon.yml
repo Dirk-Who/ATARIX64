@@ -33,7 +33,7 @@ jobs:
           APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
           lipo -info "${APP}/Contents/MacOS/AtariX"
           lipo -info "${APP}/Contents/Frameworks/SDL2.framework/SDL2"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP}/Contents/Info.plist")" = "0.6.2"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP}/Contents/Info.plist")" = "0.6.3"
 
       - name: Ad-hoc sign application bundle
         run: |
@@ -44,29 +44,29 @@ jobs:
           codesign --force --sign - "${APP}"
           codesign --verify --deep --strict --verbose=2 "${APP}"
 
-      - name: Package ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3
+      - name: Package ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4
         run: |
           APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
-          ditto -c -k --sequesterRsrc --keepParent "${APP}" "${RUNNER_TEMP}/ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${APP}" "${RUNNER_TEMP}/ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3
-          path: ${{ runner.temp }}/ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3.zip
+          name: ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4
+          path: ${{ runner.temp }}/ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4.zip
           if-no-files-found: error
 
-      - name: Publish ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3
+      - name: Publish ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3
+          RELEASE_TAG: ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4
         run: |
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "Release ${RELEASE_TAG} already exists; nothing to publish."
           else
             gh release create "${RELEASE_TAG}" \
-              "${RUNNER_TEMP}/ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3.zip#ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3.zip" \
+              "${RUNNER_TEMP}/ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4.zip#ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4.zip" \
               --target "${GITHUB_SHA}" \
-              --title "ATARIX-A64-0.6.2-Fullscreen-Mouse-Test3" \
+              --title "ATARIX-A64-0.6.3-Smooth-Fullscreen-Mouse-Test4" \
               --notes-file RELEASE_NOTES_0.6.md
           fi
