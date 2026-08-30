@@ -2983,6 +2983,9 @@ uint32_t CMagiC::AtariVsetRGB(uint32_t params, unsigned char *AdrOffset68k)
 			  index, cnt,
 			  pValues[0], pValues[1], pValues[2], pValues[3]);
 
+	if ((index >= MAGIC_COLOR_TABLE_LEN) || (cnt == 0))
+		return 0;
+
 	// durchlaufe alle zu ändernden Farben
 	pColourTable = pTheMagiC->m_pMagiCScreen->m_pColourTable;
 	j = MIN(MAGIC_COLOR_TABLE_LEN, index + cnt);
@@ -3001,7 +3004,7 @@ uint32_t CMagiC::AtariVsetRGB(uint32_t params, unsigned char *AdrOffset68k)
 #else
 		c = (pValues[1] << 16) | (pValues[2] << 8) | (pValues[3] << 0) | (0xff000000);
 #endif
-		*pColourTable++ = c;
+		*pColourTable = c;
 	}
 
 	atomic_exchange(p_bVideoBufChanged, 1);
@@ -3036,12 +3039,16 @@ uint32_t CMagiC::AtariVgetRGB(uint32_t params, unsigned char *AdrOffset68k)
 	uint16_t cnt = be16_to_cpu(theVgetRGBParm->cnt);
 	DebugInfo("CMagiC::AtariVgetRGB(index=%d, cnt=%d)", index, cnt);
 
+	if ((index >= MAGIC_COLOR_TABLE_LEN) || (cnt == 0))
+		return 0;
+
 	// durchlaufe alle zu ändernden Farben
 	pColourTable = pTheMagiC->m_pMagiCScreen->m_pColourTable;
 	j = MIN(MAGIC_COLOR_TABLE_LEN, index + cnt);
 	for	(i = index, pColourTable += index;
 		i < j;
-		i++, pValues++, pColourTable++)
+		/* VgetRGB returns one 00rrggbb longword per colour. */
+		i++, pValues += 4, pColourTable++)
 	{
 #if 0//SDL_BYTEORDER == SDL_BIG_ENDIAN
 		pValues[0] = 0;
