@@ -41,6 +41,8 @@ void EmulationToggleFullscreen(void);
 void EmulationRun(void);
 void EmulationRunSdl(void);
 int EmulationIsRunning(void);
+void EmulationRequestHostExit(void);
+int EmulationHostExitRequested(void);
 void EmulationExit(void);
 void EmulationStop(void);
 void EmulationConfig

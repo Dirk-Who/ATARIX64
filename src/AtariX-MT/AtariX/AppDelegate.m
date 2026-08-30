@@ -327,6 +327,11 @@ Of course, this assumes your delegate responds to shouldHandleEvents and handleE
 		EmulationOpenWindow();
 		EmulationRun();
 	}
+	if (EmulationHostExitRequested())
+	{
+		DebugInfo("%s() -- MagiC requested host shutdown", __func__);
+		[NSApp performSelector:@selector(terminate:) withObject:nil afterDelay:0.0];
+	}
 	DebugTrace("%s() =>", __func__);
 }
 

@@ -1681,6 +1681,11 @@ void EmulationRunner::HandleUserEvents(SDL_Event* event)
 		case TOGGLE_EMULATOR_FULLSCREEN:
 			_ToggleFullscreen();
 			break;
+
+		case QUIT_HOST_APPLICATION:
+			m_Emulator.TerminateThread();
+			m_bQuitLoop = true;
+			break;
 			
 		default:
 			break;
