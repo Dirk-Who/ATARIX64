@@ -134,6 +134,8 @@ EmulationRunner::EmulationRunner(void)
 	m_relativeMouseMode = false;
 	m_virtualMouseX = (float) (m_atariScreenW - 1) / 2.0f;
 	m_virtualMouseY = (float) (m_atariScreenH - 1) / 2.0f;
+	m_lastSentMouseX = -1;
+	m_lastSentMouseY = -1;
 	screenbitsperpixel = 32;
 }
 
@@ -253,6 +255,8 @@ void EmulationRunner::Config
 	m_atariScreenStretchY = atariScreenStretchY;
 	m_virtualMouseX = (float) (m_atariScreenW - 1) / 2.0f;
 	m_virtualMouseY = (float) (m_atariScreenH - 1) / 2.0f;
+	m_lastSentMouseX = -1;
+	m_lastSentMouseY = -1;
 	m_atariHideHostMouse = atariHideHostMouse;
 	DebugInfo("%s(): atariHideHostMouse(%u)", __func__, m_atariHideHostMouse);
 
@@ -1128,15 +1132,31 @@ static bool AtariX_WindowCoversDisplay(SDL_Window *window)
 
 	const int displayIndex = SDL_GetWindowDisplayIndex(window);
 	SDL_Rect displayBounds;
+	int windowX = 0;
+	int windowY = 0;
 	int windowW = 0;
 	int windowH = 0;
 	if (displayIndex < 0 || SDL_GetDisplayBounds(displayIndex, &displayBounds) != 0)
 		return false;
 
+	SDL_GetWindowPosition(window, &windowX, &windowY);
 	SDL_GetWindowSize(window, &windowW, &windowH);
+
+	/*
+	 * A large or maximised window is not fullscreen. Native macOS
+	 * fullscreen aligns the Cocoa content area with the complete display.
+	 * Allow a few points for SDL/Cocoa rounding on Retina displays.
+	 */
+	const int tolerance = 4;
 	return
-		windowW * 100 >= displayBounds.w * 90 &&
-		windowH * 100 >= displayBounds.h * 90;
+		windowX >= displayBounds.x - tolerance &&
+		windowX <= displayBounds.x + tolerance &&
+		windowY >= displayBounds.y - tolerance &&
+		windowY <= displayBounds.y + tolerance &&
+		windowW >= displayBounds.w - tolerance &&
+		windowW <= displayBounds.w + tolerance &&
+		windowH >= displayBounds.h - tolerance &&
+		windowH <= displayBounds.h + tolerance;
 }
 
 
@@ -1525,9 +1545,20 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 			else if (m_virtualMouseY > (float) (m_atariScreenH - 1))
 				m_virtualMouseY = (float) (m_atariScreenH - 1);
 
-			m_Emulator.SendMousePosition(
-				(int) (m_virtualMouseX + 0.5f),
-				(int) (m_virtualMouseY + 0.5f));
+			const int newMouseX = (int) (m_virtualMouseX + 0.5f);
+			const int newMouseY = (int) (m_virtualMouseY + 0.5f);
+
+			/*
+			 * Relative mode may deliver synthetic or zero-delta events even
+			 * while the physical mouse is still. Do not end a Musashi timeslice
+			 * or raise a MagiC mouse interrupt unless an Atari pixel changed.
+			 */
+			if (newMouseX != m_lastSentMouseX || newMouseY != m_lastSentMouseY)
+			{
+				m_Emulator.SendMousePosition(newMouseX, newMouseY);
+				m_lastSentMouseX = newMouseX;
+				m_lastSentMouseY = newMouseY;
+			}
 		}
 			break;
 		
