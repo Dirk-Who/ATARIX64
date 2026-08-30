@@ -104,6 +104,8 @@ class EmulationRunner
 	bool m_relativeMouseMode;
 	float m_virtualMouseX;
 	float m_virtualMouseY;
+	int m_lastSentMouseX;
+	int m_lastSentMouseY;
 
 	SDL_Surface *m_sdl_atari_surface;		// surface in Atari native pixel format or NULL
 	SDL_Surface *m_sdl_surface;				// surface in host native pixel format
