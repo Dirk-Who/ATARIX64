@@ -37,7 +37,9 @@ jobs:
       - name: Ad-hoc sign application bundle
         run: |
           APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
-          codesign --verify --strict --verbose=2 "${APP}/Contents/Frameworks/SDL2.framework"
+          SDL_FRAMEWORK="${APP}/Contents/Frameworks/SDL2.framework"
+          codesign --force --sign - "${SDL_FRAMEWORK}"
+          codesign --verify --strict --verbose=2 "${SDL_FRAMEWORK}"
           codesign --force --sign - "${APP}"
           codesign --verify --deep --strict --verbose=2 "${APP}"
 
