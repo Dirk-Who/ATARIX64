@@ -46,6 +46,53 @@ static void AtariX_EnableKeyboardEvents(bool enable)
 	}
 }
 
+/*
+ * A macOS fullscreen transition changes the Cocoa content view
+ * asynchronously. Refresh SDL's viewport and logical coordinate transform
+ * after every effective window-size change so mouse events use the new
+ * fullscreen area instead of the previous window rectangle.
+ */
+static void AtariX_RefreshWindowGeometry
+(
+	SDL_Window *window,
+	SDL_Renderer *renderer,
+	int logicalWidth,
+	int logicalHeight
+)
+{
+	if (!window || !renderer)
+		return;
+
+	/*
+	 * Remove a stale mouse rectangle left behind by a window/fullscreen
+	 * transition. Passing NULL makes the complete current window interactive.
+	 */
+	if (SDL_SetWindowMouseRect(window, NULL) != 0)
+		DebugError("SDL_SetWindowMouseRect: %s", SDL_GetError());
+
+	/*
+	 * Reset the renderer viewport before rebuilding the logical presentation.
+	 * SDL_RenderWindowToLogical() uses this scale and viewport for mouse input.
+	 */
+	if (SDL_RenderSetViewport(renderer, NULL) != 0)
+		DebugError("SDL_RenderSetViewport: %s", SDL_GetError());
+	if (SDL_RenderSetLogicalSize(renderer, logicalWidth, logicalHeight) != 0)
+		DebugError("SDL_RenderSetLogicalSize: %s", SDL_GetError());
+
+	int windowWidth = 0;
+	int windowHeight = 0;
+	int outputWidth = 0;
+	int outputHeight = 0;
+	SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+	if (SDL_GetRendererOutputSize(renderer, &outputWidth, &outputHeight) != 0)
+		DebugWarning("SDL_GetRendererOutputSize: %s", SDL_GetError());
+	DebugInfo(
+		"fullscreen geometry: window=%dx%d output=%dx%d logical=%dx%d",
+		windowWidth, windowHeight,
+		outputWidth, outputHeight,
+		logicalWidth, logicalHeight);
+}
+
 
 /*********************************************************************************************************
 *
@@ -929,10 +976,11 @@ void EmulationRunner::_OpenWindow(void)
 		DebugError("SDL %s", SDL_GetError());
 	}
 	assert(m_sdl_renderer);
-	if (SDL_RenderSetLogicalSize(m_sdl_renderer, (int) m_hostScreenW, (int) m_hostScreenH) != 0)
-	{
-		DebugError("SDL_RenderSetLogicalSize: %s", SDL_GetError());
-	}
+	AtariX_RefreshWindowGeometry(
+		m_sdl_window,
+		m_sdl_renderer,
+		(int) m_hostScreenW,
+		(int) m_hostScreenH);
 	SDL_SetRenderDrawColor(m_sdl_renderer, 0, 0, 0, 255);
 
 	(void) SDL_FillRect(m_sdl_surface, NULL, 0x00ffffff);
@@ -1228,10 +1276,20 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 					break;
 
 				case SDL_WINDOWEVENT_EXPOSED:
+					atomic_exchange(&m_Emulator.bVideoBufChanged, 1);
+					m_initiallyVisible = true;
+					_UpdateHostCursorVisibility();
+					break;
+
 				case SDL_WINDOWEVENT_RESIZED:
 				case SDL_WINDOWEVENT_SIZE_CHANGED:
 				case SDL_WINDOWEVENT_MAXIMIZED:
 				case SDL_WINDOWEVENT_RESTORED:
+					AtariX_RefreshWindowGeometry(
+						m_sdl_window,
+						m_sdl_renderer,
+						(int) m_hostScreenW,
+						(int) m_hostScreenH);
 					atomic_exchange(&m_Emulator.bVideoBufChanged, 1);
 					m_initiallyVisible = true;
 					_UpdateHostCursorVisibility();
