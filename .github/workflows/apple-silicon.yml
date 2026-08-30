@@ -34,6 +34,13 @@ jobs:
           lipo -info "${APP}/Contents/MacOS/AtariX"
           lipo -info "${APP}/Contents/Frameworks/SDL2.framework/SDL2"
 
+      - name: Ad-hoc sign application bundle
+        run: |
+          APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
+          codesign --verify --strict --verbose=2 "${APP}/Contents/Frameworks/SDL2.framework"
+          codesign --force --sign - "${APP}"
+          codesign --verify --deep --strict --verbose=2 "${APP}"
+
       - name: Package AtariX 0.5
         run: |
           APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
