@@ -2983,6 +2983,9 @@ uint32_t CMagiC::AtariVsetRGB(uint32_t params, unsigned char *AdrOffset68k)
 			  index, cnt,
 			  pValues[0], pValues[1], pValues[2], pValues[3]);
 
+	if ((index >= MAGIC_COLOR_TABLE_LEN) || (cnt == 0))
+		return 0;
+
 	// durchlaufe alle zu ändernden Farben
 	pColourTable = pTheMagiC->m_pMagiCScreen->m_pColourTable;
 	j = MIN(MAGIC_COLOR_TABLE_LEN, index + cnt);
@@ -2995,13 +2998,9 @@ uint32_t CMagiC::AtariVsetRGB(uint32_t params, unsigned char *AdrOffset68k)
 		// 0xffff0000		red
 		// 0xff00ff00		green
 		// 0xff0000ff		blue
-#if SDL_VERSION_ATLEAST(2,0,12)
-		/* something has changed here with newer version of SDL... */
-		c = (pValues[3] << 16) | (pValues[2] << 8) | (pValues[1] << 0) | (0xff000000);
-#else
-		c = (pValues[1] << 16) | (pValues[2] << 8) | (pValues[3] << 0) | (0xff000000);
-#endif
-		*pColourTable++ = c;
+		c = (pValues[1] << 16) | (pValues[2] << 8) |
+			(pValues[3] << 0) | 0xff000000;
+		*pColourTable = c;
 	}
 
 	atomic_exchange(p_bVideoBufChanged, 1);
@@ -3036,32 +3035,21 @@ uint32_t CMagiC::AtariVgetRGB(uint32_t params, unsigned char *AdrOffset68k)
 	uint16_t cnt = be16_to_cpu(theVgetRGBParm->cnt);
 	DebugInfo("CMagiC::AtariVgetRGB(index=%d, cnt=%d)", index, cnt);
 
+	if ((index >= MAGIC_COLOR_TABLE_LEN) || (cnt == 0))
+		return 0;
+
 	// durchlaufe alle zu ändernden Farben
 	pColourTable = pTheMagiC->m_pMagiCScreen->m_pColourTable;
 	j = MIN(MAGIC_COLOR_TABLE_LEN, index + cnt);
 	for	(i = index, pColourTable += index;
 		i < j;
-		i++, pValues++, pColourTable++)
+		/* VgetRGB returns one 00rrggbb longword per colour. */
+		i++, pValues += 4, pColourTable++)
 	{
-#if 0//SDL_BYTEORDER == SDL_BIG_ENDIAN
 		pValues[0] = 0;
-		pValues[1] = (*pColourTable) >> 24;
-		pValues[2] = (*pColourTable) >> 16;
-		pValues[3] = (*pColourTable) >> 8;
-		//		rmask = 0xff000000;
-		//		gmask = 0x00ff0000;
-		//		bmask = 0x0000ff00;
-		//		amask = 0x000000ff;
-#else
-		pValues[0] = 0;
-		pValues[1] = (*pColourTable) >> 0;
+		pValues[1] = (*pColourTable) >> 16;
 		pValues[2] = (*pColourTable) >> 8;
-		pValues[3] = (*pColourTable) >> 16;
-		//		rmask = 0x000000ff;
-		//		gmask = 0x0000ff00;
-		//		bmask = 0x00ff0000;
-		//		amask = 0xff000000;
-#endif
+		pValues[3] = (*pColourTable) >> 0;
 	}
 
 	return 0;
