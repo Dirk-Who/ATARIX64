@@ -840,9 +840,10 @@ void EmulationRunner::_OpenWindow(void)
 			bmask = 0x0000ff00;
 			amask = 0x000000ff;
 #else
-			rmask = 0x000000ff;
+			/* Atari true-colour pixels are represented as 0x00RRGGBB. */
+			rmask = 0x00ff0000;
 			gmask = 0x0000ff00;
-			bmask = 0x00ff0000;
+			bmask = 0x000000ff;
 			amask = 0xff000000;
 #endif
 			pixelType = 16;							// RGBDirect, 0 would be indexed
@@ -886,9 +887,10 @@ void EmulationRunner::_OpenWindow(void)
 		bmask = 0x0000ff00;
 		amask = 0x000000ff;
 #else
-		rmask = 0x000000ff;
+		/* ConvertSurface writes canonical 0xAARRGGBB host pixels. */
+		rmask = 0x00ff0000;
 		gmask = 0x0000ff00;
-		bmask = 0x00ff0000;
+		bmask = 0x000000ff;
 		amask = 0xff000000;
 #endif
 		m_sdl_surface = SDL_CreateRGBSurface(
