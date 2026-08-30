@@ -84,6 +84,8 @@ class EmulationRunner
 		void _CloseWindow(void);
 		void _ToggleFullscreen(void);
 		void _UpdateHostCursorVisibility(void);
+		void _SetRelativeMouseMode(bool enable);
+		void _UpdateFullscreenMouseMode(void);
 		void _StartEmulatorThread(void);
 		void _StopEmulatorThread(void);
 
@@ -99,6 +101,9 @@ class EmulationRunner
 	uint32_t m_counter;
 	bool m_visible;
 	bool m_initiallyVisible;
+	bool m_relativeMouseMode;
+	float m_virtualMouseX;
+	float m_virtualMouseY;
 
 	SDL_Surface *m_sdl_atari_surface;		// surface in Atari native pixel format or NULL
 	SDL_Surface *m_sdl_surface;				// surface in host native pixel format
