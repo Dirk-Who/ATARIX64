@@ -1586,10 +1586,50 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 			
 		case SDL_MOUSEWHEEL:
 		{
-#if 0
 			const SDL_MouseWheelEvent *ev = (SDL_MouseWheelEvent *) &event;
-			DebugInfo("mouse wheel: x = %d, y = %d", ev->x, ev->y);
-#endif
+			int wheelX = ev->x;
+			int wheelY = ev->y;
+			int scanCode = SDL_SCANCODE_UNKNOWN;
+			int turns = 0;
+
+			/*
+			 * The classic Atari IKBD mouse packet has no wheel field. Pass a
+			 * wheel notch through the existing keyboard channel instead. This
+			 * is understood by MagiC without a private host/guest protocol and
+			 * also gives older GEM applications a useful, conventional fallback.
+			 *
+			 * SDL reports positive Y for scrolling up and positive X for
+			 * scrolling right. macOS "natural scrolling" is marked FLIPPED;
+			 * normalise it before selecting the Atari cursor key.
+			 */
+			if (ev->direction == SDL_MOUSEWHEEL_FLIPPED)
+			{
+				wheelX = -wheelX;
+				wheelY = -wheelY;
+			}
+
+			if (wheelY != 0)
+			{
+				scanCode = wheelY > 0 ? SDL_SCANCODE_UP : SDL_SCANCODE_DOWN;
+				turns = wheelY > 0 ? wheelY : -wheelY;
+			}
+			else if (wheelX != 0)
+			{
+				scanCode = wheelX > 0 ? SDL_SCANCODE_RIGHT : SDL_SCANCODE_LEFT;
+				turns = wheelX > 0 ? wheelX : -wheelX;
+			}
+
+			/* Do not overflow MagiC's small keyboard/IKBD ring buffer. */
+			if (turns > 8)
+				turns = 8;
+
+			while (turns-- > 0 && scanCode != SDL_SCANCODE_UNKNOWN)
+			{
+				if (m_Emulator.SendSdlKeyboard(scanCode, false) != 0)
+					break;
+				if (m_Emulator.SendSdlKeyboard(scanCode, true) != 0)
+					break;
+			}
 		}
 			break;
 			
