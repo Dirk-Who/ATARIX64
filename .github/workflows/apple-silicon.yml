@@ -44,15 +44,15 @@ jobs:
           codesign --force --sign - "${APP}"
           codesign --verify --deep --strict --verbose=2 "${APP}"
 
-      - name: Package ATARIX-A64-0.6.6-MouseWheel-Test
+      - name: Package ATARIX-A64-0.6.6-Release
         run: |
           APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
-          ditto -c -k --sequesterRsrc --keepParent "${APP}" "${RUNNER_TEMP}/ATARIX-A64-0.6.6-MouseWheel-Test.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${APP}" "${RUNNER_TEMP}/ATARIX-A64-0.6.6-Release.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ATARIX-A64-0.6.6-MouseWheel-Test
-          path: ${{ runner.temp }}/ATARIX-A64-0.6.6-MouseWheel-Test.zip
+          name: ATARIX-A64-0.6.6-Release
+          path: ${{ runner.temp }}/ATARIX-A64-0.6.6-Release.zip
           if-no-files-found: error
 
       - name: Publish ATARIX-A64-0.6.6-Release
@@ -65,7 +65,7 @@ jobs:
             echo "Release ${RELEASE_TAG} already exists; nothing to publish."
           else
             gh release create "${RELEASE_TAG}" \
-              "${RUNNER_TEMP}/ATARIX-A64-0.6.6-MouseWheel-Test.zip#ATARIX-A64-0.6.6-Release.zip" \
+              "${RUNNER_TEMP}/ATARIX-A64-0.6.6-Release.zip#ATARIX-A64-0.6.6-Release.zip" \
               --target "${GITHUB_SHA}" \
               --title "ATARIX-A64-0.6.6-Release" \
               --notes-file RELEASE_NOTES_0.6.6.md
