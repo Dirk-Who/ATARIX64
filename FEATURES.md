@@ -1,8 +1,12 @@
-# AtariX 0.6.6 feature overview
+# AtariX 0.7 feature overview
 
 This document describes the current state of the Apple Silicon continuation.
 It distinguishes working features from compatibility boundaries and future
 work.
+
+Version 0.7 contains safety corrections, including stricter
+screen-width limits for the bundled drivers. See [SAFETY_FIXES.md](SAFETY_FIXES.md)
+for the exact changes and the distinction between host tests and guest validation.
 
 ## Platform and build
 
@@ -77,7 +81,7 @@ work.
 - Automate initial `MAGIC_C` creation and setup
 - Re-evaluate MacXFS against current macOS filesystem APIs and HostXFS ideas
 - Add automated guest-level regression tests for display, files and input
-- Reproduce and assess the historical one-pixel width/height issue across
-  supported screen drivers
+- Extend guest-level coverage of the corrected Pixmap dimensions across all
+  supported screen and offscreen drivers
 - Evaluate optional 68EC030 compatibility without exposing incomplete MMU
   behaviour

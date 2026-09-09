@@ -377,9 +377,9 @@ typedef struct _mx_fd {
 	// Hilfsfunktionen
 
 	void fetchXFSC(XfsCookie *fc, uint16_t drv, MXFSDD *dd);
-	char *cookie2Pathname(struct mount_info *drv, XfsFsFile *fs, const char *name, char *buf, bool insert_root);
-	char *cookie2Pathname(XfsCookie *fc, const char *name, char *buf, bool insert_root);
-	bool getHostFileName(char *result, struct mount_info *drv, const char *pathName, const char *name);
+	char *cookie2Pathname(struct mount_info *drv, XfsFsFile *fs, const char *name, char *buf, size_t capacity, bool insert_root);
+	char *cookie2Pathname(XfsCookie *fc, const char *name, char *buf, size_t capacity, bool insert_root);
+	bool getHostFileName(char *result, size_t capacity, struct mount_info *drv, const char *pathName, const char *name);
 
 	static char *my_canonicalize_file_name(const char *filename, bool append_slash);
 

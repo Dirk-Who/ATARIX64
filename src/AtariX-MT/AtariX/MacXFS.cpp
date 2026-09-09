@@ -49,6 +49,8 @@
 #include <utime.h>
 #include <sys/time.h>
 #include <sys/ioctl.h>
+#include <string>
+#include <vector>
 
 // please remember to leave this define _after_ the required system headers!!!
 // some systems does define this to some important value for them....
@@ -1183,181 +1185,91 @@ int32_t CMacXFS::xfs_drv_close(uint16_t drv, uint16_t mode)
 
 int32_t CMacXFS::xfs_path2DD
 (
-	uint16_t mode,
-	uint16_t dev, MXFSDD *rel_dd, char *pathname,
+	uint16_t mode, uint16_t dev, MXFSDD *rel_dd, char *pathname,
 	char **restpfad, MXFSDD *symlink_dd, char **symlink,
-	MXFSDD *dd,
-	uint16_t *dir_drive
+	MXFSDD *dd, uint16_t *dir_drive
 )
 {
-#pragma unused(symlink_dd)
-	int32_t doserr;
-	char macpath[MAXPATHNAMELEN];
-	char *s, *t, *u;
-	unsigned char c;
-	XfsFsFile *reldir;
-	XfsFsFile *newFsFile;
+	(void)symlink_dd;
 	XfsCookie fc;
-	struct stat st;
-	char mac_dirname[MAXPATHNAMELEN];
-	char atariname_short[MAXPATHNAMELEN];
-
-#ifdef DEBUG_VERBOSE
-	DebugInfo("CMacXFS::xfs_path2DD(drv=%d, DD=%08lx, pathname=\"%s\", mode=%d)", dev, (unsigned long)rel_dd->dirID, pathname, mode);
-#endif
-
 	fetchXFSC(&fc, dev, rel_dd);
-	
-	if (fc.drv == NULL)    /* ungueltig */
+	if (!fc.drv || !fc.index)
 		return TOS_EDRIVE;
 	if (fc.drv->drv_changed)
 		return TOS_E_CHNG;
-
-	reldir = fc.index;
-
-	/* Hier schon einmal das Laufwerk setzen, das wir zurückliefern	*/
-	/* Wenn wir einen Alias verfolgen, kann sich das noch ändern	*/
-	/* -------------------------------------------------------------	*/
+	if (strnlen(pathname, MAXPATHNAMELEN) == MAXPATHNAMELEN)
+		return TOS_ERANGE;
 
 	*dir_drive = cpu_to_be16(dev);
-
-	/* Der relative DOS-Pfad wird umgewandelt in einen relativen	*/
-	/* Mac-Pfad. Eintraege "." und ".." werden beruecksichtigt.		*/
-	/* ------------------------------------------------------------ */
-
-	cookie2Pathname(fc.drv, reldir, NULL, macpath, true);
-	s = macpath + strlen(macpath);
-	if (s[-1] != *DIRSEPARATOR)
-		*s++ = *DIRSEPARATOR;				// alle Pfade sind Mac-relativ
-	t = pathname;
-	u = s;
-	while (*pathname)
+	*symlink = NULL;
+	XfsFsFile *dir = fc.index;
+	char *cursor = pathname;
+	for (;;)
 	{
-		c = *pathname++;	// 9.6.96
-		
-		/*
-		 * Note: cannot use Atari2HostUtf8Copy here,
-		 * because we need to pass back the pathname in *restpfad
-		 */
-		if (IS_DIR_SEP(c))
+		while (IS_DIR_SEP(*cursor))
+			++cursor;
+		char *element = cursor;
+		while (*cursor && !IS_DIR_SEP(*cursor))
+			++cursor;
+		// mode 0 leaves the final filename for fopen/sfirst/etc.
+		if (!*cursor && !mode)
 		{
-			t = pathname;	// letztes Element Atari
-			if (IS_DIR_SEP(*pathname))
+			*restpfad = element;
+			break;
+		}
+		const std::string part(element, cursor - element);
+		if (part.empty())
+		{
+			*restpfad = cursor;
+			break;
+		}
+		if (part == "..")
+		{
+			if (!dir->parent)
 			{
-				// war leeres Element => ignorieren
-				continue;
-			} else if (t[0] == '.' && pathname == t + 2)
-			{
-				s -= 2;	// war Element "." => entfernen
-				continue;
-			} else if (t[0] == '.' && t[1] == '.' && pathname == t + 3)
-			{
-				// war Element ".."
-				s -= 3;	// zunaechst aus Mac-Pfad entfernen
-				if (s > macpath + 2 && reldir->parent != NULL)
-				{
-					// ich kann zurueckgehen
-					s--;
-					do	
-						s--;
-					while (*s != *DIRSEPARATOR);	// gehe zurueck
-					reldir = reldir->parent;		// parent anwaehlen
-					continue;
-				} else
-				{
-					// ich kann nicht zurueckgehen
-					// bin schon root
-					*restpfad = t;
-					*symlink = NULL;
-					return ELINK;
-				}
+				*restpfad = cursor;
+				return ELINK;
 			}
-			*s = '\0';
-			CTextConversion::Atari2HostUtf8Copy(mac_dirname, u, MAXPATHNAMELEN);
+			dir = dir->parent;
+		}
+		else if (part != ".")
+		{
+			if (part.find(':') != std::string::npos)
+				return TOS_EPTHNF;
+			char hostName[MAXPATHNAMELEN];
+			if (!CTextConversion::Atari2HostUtf8Copy(hostName, part.c_str(), sizeof(hostName)))
+				return TOS_ERANGE;
+			char fullPath[MAXPATHNAMELEN];
+			if (!cookie2Pathname(fc.drv, dir, hostName, fullPath, sizeof(fullPath), true))
+				return errnoHost2Mint(errno, TOS_EPTHNF);
+			struct stat st;
+			if (stat(fullPath, &st) != 0)
+			{
+				const int32_t error = errnoHost2Mint(errno, TOS_EPTHNF);
+				return error == TOS_EFILNF ? TOS_EPTHNF : error;
+			}
+			if (!S_ISDIR(st.st_mode))
+				return TOS_EPTHNF;
+			char shortName[14];
+			const char *atariName = hostName;
 			if (fc.drv->drv_flags & M_DRV_DOSNAMES)
 			{
-				nameto_8_3(u, atariname_short, 1, true);
-				newFsFile = reldir->insert(*this, atariname_short, mac_dirname);
-			} else
-			{
-				newFsFile = reldir->insert(*this, mac_dirname, mac_dirname);
+				nameto_8_3(part.c_str(), shortName, 1, true);
+				atariName = shortName;
 			}
-			if (newFsFile == NULL)
-			{
+			XfsFsFile *next = dir->insert(*this, atariName, hostName);
+			if (!next)
 				return TOS_ENSMEM;
-			}
-			reldir = newFsFile;
-			*s++ = *DIRSEPARATOR;
-			u = s;						// letztes Element Mac
-		} else if (c == ':')
+			dir = next;
+		}
+		if (!*cursor)
 		{
-			return TOS_EPTHNF;				// Doppelpunkt nicht erlaubt
-		} else
-		{
-			*s++ = c;
+			*restpfad = cursor;
+			break;
 		}
 	}
-	*s = '\0';
-
-	newFsFile = reldir;
-	if (!mode) 			/* Dateinamen noch nicht bearbeiten */
-	{
-		*u = '\0';
-	} else
-	{
-		if (s[-1] != *DIRSEPARATOR)
-		{
-			CTextConversion::Atari2HostUtf8Copy(mac_dirname, u, MAXPATHNAMELEN);
-			if (fc.drv->drv_flags & M_DRV_DOSNAMES)
-			{
-				nameto_8_3(u, atariname_short, 1, true);
-				newFsFile = reldir->insert(*this, atariname_short, mac_dirname);
-			} else
-			{
-				newFsFile = reldir->insert(*this, mac_dirname, mac_dirname);
-			}
-			if (newFsFile == NULL)
-			{
-				return TOS_ENSMEM;
-			}
-			reldir = newFsFile;
-			*s++ = *DIRSEPARATOR;
-			*s = '\0';
-			u = s;						// letztes Element Mac
-		}
-	}
-
-	/* Jetzt ist der Pfad in einen Mac-Pfad umgewandelt.	*/
-	/* Wir versuchen zunaechst, die dirID mit nur		*/
-	/* einem Aufruf zu bestimmen						*/
-	/* ---------------------------------------------------	*/
-	CTextConversion::Atari2HostUtf8Copy(atariname_short, u, MAXPATHNAMELEN);
-	cookie2Pathname(fc.drv, reldir, atariname_short, mac_dirname, true);
-#ifdef DEBUG_VERBOSE
-	DebugInfo("CMacXFS::xfs_path2DD(%s -> \"%s\")", macpath, mac_dirname);
-#endif
-	
-	if (stat(mac_dirname, &st) != 0)
-	{
-		doserr = errnoHost2Mint(errno, TOS_EFILNF);
-		if (doserr == TOS_EFILNF)
-		     doserr = TOS_EPTHNF;
-		return doserr;
-	}		
-
-	if (mode)                                       /* Verzeichnis */
-	{
-		if (!S_ISDIR(st.st_mode))
-			return TOS_EPTHNF;                         /* kein SubDir */
-		*restpfad = pathname + strlen(pathname);     /* kein Restpfad */
-	} else
-	{
-		*restpfad = t;                               /* Restpfad */
-	}
-
-	dd->dirID = MAPVOIDPTO32(newFsFile);
+	dd->dirID = MAPVOIDPTO32(dir);
 	dd->vRefNum = 0;
-
 	return TOS_E_OK;
 }
 
@@ -1464,17 +1376,15 @@ int32_t CMacXFS::_snext(MAC_DTA *dta)
 
 			/* Alias dereferenzieren	*/
 			/* ----------------------------------------	*/
-			cookie2Pathname(&macdta->fc, NULL, fpathName, true);
-			strcat(fpathName, DIRSEPARATOR);
-			strcat(fpathName, dirEntry->d_name);
+			if (!cookie2Pathname(&macdta->fc, dirEntry->d_name, fpathName, sizeof(fpathName), true))
+				return errnoHost2Mint(errno, TOS_EPTHNF);
 			if (stat(fpathName, &st) != 0)
 				continue;
 			dosname[11] = mac2DOSAttr(&st);
 		} else
 		{
-			cookie2Pathname(&macdta->fc, NULL, fpathName, true);
-			strcat(fpathName, DIRSEPARATOR);
-			strcat(fpathName, dirEntry->d_name);
+			if (!cookie2Pathname(&macdta->fc, dirEntry->d_name, fpathName, sizeof(fpathName), true))
+				return errnoHost2Mint(errno, TOS_EPTHNF);
 			if (stat(fpathName, &st) != 0)
 			{
 				DebugInfo("stats %s failed", fpathName);
@@ -1528,7 +1438,8 @@ int32_t CMacXFS::xfs_sfirst(XfsCookie *fc, char *name,
 	/* Unschoenheit im Kernel ausbügeln: */
 	dta->mxdta.dta_drive = fc->dev;
 	dta->mxdta.dta_name[0] = 0;		//  gefundenen Namen erstmal löschen
-	cookie2Pathname(fc, NULL, fpathName, true);
+	if (!cookie2Pathname(fc, NULL, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 	DebugInfo("CMacXFS::xfs_sfirst(%s, attrib=0x%04x)", fpathName, attrib);
 	dir = host_opendir(fpathName);
 	if (dir == NULL)
@@ -1642,8 +1553,10 @@ int32_t CMacXFS::xfs_fopen(XfsCookie *fc, const char *name, uint16_t omode, uint
 	if ((fc->drv->drv_flags & M_DRV_READONLY) && (flags & O_CREAT))
 		return TOS_EWRPRO;
 
-	CTextConversion::Atari2HostUtf8Copy(hostname, name, MAXPATHNAMELEN);
-	cookie2Pathname(fc, hostname, fpathName, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(hostname, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, hostname, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 	
 #ifdef NOTYET
 	if (!fc->index->created && (flags & O_CREAT))
@@ -1749,8 +1662,10 @@ int32_t CMacXFS::xfs_fdelete(XfsCookie *dir, const char *name)
 	if (dir->drv->drv_flags & M_DRV_READONLY)
 		return TOS_EWRPRO;
 
-	CTextConversion::Atari2HostUtf8Copy(hostname, name, MAXPATHNAMELEN);
-	cookie2Pathname(dir, hostname, fpathName, true); // get the cookie filename
+	if (!CTextConversion::Atari2HostUtf8Copy(hostname, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(dir, hostname, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 //	DebugInfo("CMacXFS::xfs_fdelete(name=%s)", fpathName);
 
@@ -1800,13 +1715,17 @@ int32_t CMacXFS::xfs_link(XfsCookie *fromDir, char *fromname, XfsCookie *toDir, 
 
 	char ffromName[MAXPATHNAMELEN];
 	char fromName[MAXPATHNAMELEN];
-	CTextConversion::Atari2HostUtf8Copy(fromName, fromname, MAXPATHNAMELEN);
-	cookie2Pathname(fromDir, fromName, ffromName, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(fromName, fromname, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fromDir, fromName, ffromName, sizeof(ffromName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	char ftoName[MAXPATHNAMELEN];
 	char toName[MAXPATHNAMELEN];
-	CTextConversion::Atari2HostUtf8Copy(toName, toname, MAXPATHNAMELEN);
-	cookie2Pathname(toDir, toName, ftoName, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(toName, toname, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(toDir, toName, ftoName, sizeof(ftoName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	if (mode)
 	{
@@ -1945,8 +1864,10 @@ int32_t CMacXFS::xfs_xattr(XfsCookie *fc, const char *name, XATTR *xattr, uint16
 		if (name[0] == '.' && !name[1])
 			name = "";		// "." wie leerer Name
 	}
-	CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN);
-	cookie2Pathname(fc, fName, fname, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, fName, fname, sizeof(fname), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	/* Im Modus 0 muessen Aliase dereferenziert werden	*/
 	/* ------------------------------------------------	*/
@@ -1978,8 +1899,10 @@ int32_t CMacXFS::xfs_stat64(XfsCookie *fc, const char *name, MINT_STAT64 *statp)
 		if (name[0] == '.' && !name[1])
 			name = "";		// "." wie leerer Name
 	}
-	CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN);
-	cookie2Pathname(fc, fName, fname, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, fName, fname, sizeof(fname), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	if (lstat(fname, &st) != 0)
 		return errnoHost2Mint(errno, TOS_EFILNF);
@@ -2025,8 +1948,10 @@ int32_t CMacXFS::xfs_attrib(XfsCookie *fc, const char *name, uint16_t rwflag, ui
 	if (rwflag && (fc->drv->drv_flags & M_DRV_READONLY))
 		return TOS_EWRPRO;
 
-	CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN);
-	cookie2Pathname(fc, fName, fpathName, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 	
 	/*
 	 * Fattrib() is only supposed to change flags of
@@ -2107,8 +2032,10 @@ int32_t CMacXFS::xfs_fchown(XfsCookie *fc, const char *name, uint16_t uid, uint1
 	if (fname_is_invalid(name))
 		return TOS_EACCDN;
 
-	CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN);
-	cookie2Pathname(fc, fName, fpathName, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 	if (stat(fpathName, &st) != 0)
 		return errnoHost2Mint(errno, TOS_EFILNF);
 
@@ -2141,8 +2068,10 @@ int32_t CMacXFS::xfs_fchmod(XfsCookie *fc, const char *name, uint16_t fmode)
 		return TOS_EWRPRO;
 	if (fname_is_invalid(name))
 		return TOS_EACCDN;
-	CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN);
-	cookie2Pathname(fc, fName, fpathName, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	if (chmod(fpathName, modeMint2Host(fmode)))
 		return errnoHost2Mint(errno, TOS_EACCDN);
@@ -2181,10 +2110,12 @@ int32_t CMacXFS::xfs_dcreate(XfsCookie *fc, const char *name)
 	if (fc->drv->drv_flags & M_DRV_READONLY)
 		return TOS_EWRPRO;
 
-	CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN);
-	cookie2Pathname(fc, fName, fpathName, true);
+	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 	if (mkdir(fpathName, 0755) != 0)
-		errnoHost2Mint(errno, TOS_EFILNF);
+		return errnoHost2Mint(errno, TOS_EFILNF);
 	return TOS_E_OK;
 
 #endif
@@ -2217,7 +2148,8 @@ int32_t CMacXFS::xfs_ddelete(XfsCookie *fc)
 
 	if (fc->drv->drv_flags & M_DRV_READONLY)
 		return TOS_EWRPRO;
-	cookie2Pathname(fc, NULL, fpathName, true);
+	if (!cookie2Pathname(fc, NULL, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 	if (rmdir(fpathName) != 0)
 		return errnoHost2Mint(errno, TOS_EFILNF);
 	return TOS_E_OK;
@@ -2243,7 +2175,8 @@ int32_t CMacXFS::xfs_DD2name(XfsCookie *fc, char *buf, uint16_t bufsiz)
 	if (fc->drv->drv_changed)
 		return TOS_E_CHNG;
 
-    cookie2Pathname(fc, NULL, fpathName, false); // get the cookie filename
+	if (!cookie2Pathname(fc, NULL, fpathName, sizeof(fpathName), false))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	CTextConversion::Host2AtariUtf8Copy(pathName + 1, fpathName, sizeof(pathName) - 1);
 	pathName[0] = '\\';
@@ -2277,7 +2210,8 @@ int32_t CMacXFS::xfs_dopendir(MAC_DIRHANDLE *dirh, XfsCookie *fc, uint16_t tosfl
 	dirh->fc = *fc;
 	dirh->tosflag = tosflag;
 	dirh->index = 0;
-	cookie2Pathname(&dirh->fc, NULL, fpathName, true);
+	if (!cookie2Pathname(&dirh->fc, NULL, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 	DebugInfo("CMacXFS::%s(%s)", __FUNCTION__, fpathName);
 
 	dirh->hostDir = host_opendir(fpathName);
@@ -2543,7 +2477,8 @@ int32_t CMacXFS::xfs_dfree(XfsCookie *fc, uint32_t data[4])
 		data[3] = cpu_to_be32(1);						// Sektoren pro Cluster
 		return TOS_E_OK;
 	}
-	cookie2Pathname(fc->drv, fc->drv->host_root, NULL, fpathName, true);
+	if (!cookie2Pathname(fc->drv, fc->drv->host_root, NULL, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	STATVFS buff;
 	int32_t res = host_statvfs(fpathName, &buff);
@@ -2695,9 +2630,12 @@ int32_t CMacXFS::xfs_symlink(XfsCookie *fc, const char *name, const char *toname
 	if (fc->drv->drv_flags & M_DRV_READONLY)
 		return TOS_EWRPRO;
 
-	CTextConversion::Atari2HostUtf8Copy(ffromname, name, sizeof(ffromname));
-	cookie2Pathname(fc, ffromname, ffromName, true);
-	CTextConversion::Atari2HostUtf8Copy(ftoname, toname, sizeof(ftoname));
+	if (!CTextConversion::Atari2HostUtf8Copy(ffromname, name, sizeof(ffromname)))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, ffromname, ffromName, sizeof(ffromName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
+	if (!CTextConversion::Atari2HostUtf8Copy(ftoname, toname, sizeof(ftoname)))
+		return TOS_ERANGE;
 	strd2upath(ftoname);
 	strcpy(ftoName, ftoname);
 
@@ -2753,10 +2691,13 @@ int32_t CMacXFS::xfs_symlink(XfsCookie *fc, const char *name, const char *toname
 					// target drive found; replace MiNTs mount point
 					// with the hosts root directory
 					int len = MAXPATHNAMELEN;
-					strcpy(ftoName, drv->host_root->m_hostname);
-					int hrLen = (int)strlen(drv->host_root->m_hostname);
-					if (hrLen < len)
-						strncpy(ftoName + hrLen, ftoname + 3, len - hrLen);
+					std::string destination(drv->host_root->m_hostname);
+					if (!destination.empty() && destination.back() != '/')
+						destination += '/';
+					destination += ftoname + 3;
+					if (destination.size() >= size_t(len))
+						return TOS_ERANGE;
+					strcpy(ftoName, destination.c_str());
 					found = true;
 					break;
 				}
@@ -2825,13 +2766,20 @@ int32_t CMacXFS::xfs_readlink(XfsCookie *fc, const char *name,
 
 	/* Name erstellen und Alias auslesen	*/
 	/* ---------------------------------	*/
-	CTextConversion::Atari2HostUtf8Copy(fname, name, sizeof(fname));
-	cookie2Pathname(fc, fname, fpathName, true); // get the cookie filename
+	if (!CTextConversion::Atari2HostUtf8Copy(fname, name, sizeof(fname)))
+		return TOS_ERANGE;
+	if (!cookie2Pathname(fc, fname, fpathName, sizeof(fpathName), true))
+		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	if (!host_readlink(fpathName, target, sizeof(target)))
 		return errnoHost2Mint(errno, TOS_EFILNF);
 
-	CTextConversion::Host2AtariUtf8Copy(buf, target, bufsiz);
+	char atariTarget[MAXPATHNAMELEN];
+	if (!CTextConversion::Host2AtariUtf8Copy(atariTarget, target, sizeof(atariTarget)))
+		return TOS_ERANGE;
+	if (!buf || strlen(atariTarget) + 1 > bufsiz)
+		return TOS_ERANGE;
+	strcpy(buf, atariTarget);
 	return TOS_E_OK;
 }
 
@@ -2891,7 +2839,8 @@ int32_t CMacXFS::xfs_dcntl
 		{
 			STATVFS buff;
 
-			cookie2Pathname(fc, NULL, fname, true);
+			if (!cookie2Pathname(fc, NULL, fname, sizeof(fname), true))
+				return errnoHost2Mint(errno, TOS_EPTHNF);
 
 			int32_t res = host_statvfs(fname, &buff);
 			if (res != TOS_E_OK)
@@ -2933,8 +2882,10 @@ int32_t CMacXFS::xfs_dcntl
 			{
 				t_set.actime = t_set.modtime = time(NULL);
 			}
-			CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp));
-			cookie2Pathname(fc, temp, fname, true);
+			if (!CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp)))
+				return TOS_ERANGE;
+			if (!cookie2Pathname(fc, temp, fname, sizeof(fname), true))
+				return errnoHost2Mint(errno, TOS_EPTHNF);
 			if (utime(fname, &t_set))
 				return errnoHost2Mint(errno, TOS_EFILNF);
 		}
@@ -2946,8 +2897,10 @@ int32_t CMacXFS::xfs_dcntl
 		break;
 
 	case MINT_FTRUNCATE:
-		CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp));
-		cookie2Pathname(fc, temp, fname, true);
+		if (!CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp)))
+			return TOS_ERANGE;
+		if (!cookie2Pathname(fc, temp, fname, sizeof(fname), true))
+			return errnoHost2Mint(errno, TOS_EPTHNF);
 
 		DebugInfo("CMacXFS::%s: FTRUNCATE: %s, %08x", __FUNCTION__, fname, arg);
 		if (fc->drv->drv_flags & M_DRV_READONLY)
@@ -3009,8 +2962,10 @@ int32_t CMacXFS::xfs_dcntl
 
 			case MMEX_GETRSRCLEN:
 				// Mac-Rsrc-Länge liefern
-				CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp));
-				cookie2Pathname(fc, temp, fname, true);
+				if (!CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp)))
+					return TOS_ERANGE;
+				if (!cookie2Pathname(fc, temp, fname, sizeof(fname), true))
+					return errnoHost2Mint(errno, TOS_EPTHNF);
 				// strcat(fname, "/..namedfork/rsrc
 #ifdef NOTYET
 				doserr = getCatInfo (drv, &pb, true);
@@ -4432,7 +4387,7 @@ void CMacXFS::SetXFSDrive
 			if (CFURLGetFileSystemRepresentation(pathUrl, true, (unsigned char *)dirname, sizeof(dirname)))
 			{
 				size_t len = strlen(dirname);
-				if (len > 0 && dirname[len - 1] != *DIRSEPARATOR)
+				if (len > 0 && dirname[len - 1] != *DIRSEPARATOR && len + 1 < sizeof(dirname))
 					strcat(dirname, DIRSEPARATOR);
 				drv->host_root = new XfsFsFile(*this, dirname, dirname);
 				if (strcmp(dirname, "/") == 0)
@@ -4583,131 +4538,161 @@ int32_t CMacXFS::RawDrvr (uint32_t param, unsigned char *AdrOffset68k)
  *			 should be used.
  * <-- complete filepath or NULL if error
  */
-char *CMacXFS::cookie2Pathname(struct mount_info *drv, XfsFsFile *fs, const char *name, char *buf, bool insert_root)
+char *CMacXFS::cookie2Pathname(struct mount_info *drv, XfsFsFile *fs, const char *name,
+	char *buf, size_t capacity, bool insert_root)
 {
-	static char sbuf[MAXPATHNAMELEN]; /* FIXME: size should told by unix */
-
-	if (!buf)
-		// use static buffer
-		buf = sbuf;
-
-	if (!fs)
+	if (!buf || capacity == 0 || !drv || !drv->host_root || !fs)
 	{
-		// we are at root
-		if (!name)
-			return NULL;
-
-		if (insert_root)
-			strcpy(buf, drv->host_root->m_hostname);
-		else
-			*buf = '\0';
-		return buf;
-	}
-
-	// recurse to deep
-	if (!cookie2Pathname(drv, fs->parent, fs->m_hostname, buf, insert_root))
+		errno = EINVAL;
 		return NULL;
-
-	// returning from the recursion -> append the appropriate filename
-	if (name && *name)
-	{
-		// make sure there's the right trailing dir separator
-		int len = (int)strlen(buf);
-		if (len > 0)
-		{
-			char *last = buf + len - 1;
-			if (*last == '\\' || *last == '/')
-			{
-				*last = '\0';
-			}
-			strcat(buf, DIRSEPARATOR);
-		}
-		getHostFileName(buf + strlen(buf), drv, buf, name);
 	}
-
+	buf[0] = '\0';
+	std::vector<const char *> parts;
+	for (XfsFsFile *node = fs; node->parent; node = node->parent)
+	{
+		// Each directory needs at least a separator. Bound traversal too.
+		if (parts.size() >= capacity)
+		{
+			errno = ENAMETOOLONG;
+			return NULL;
+		}
+		parts.push_back(node->m_hostname);
+	}
+	const char *root = insert_root ? drv->host_root->m_hostname : "";
+	if (strlen(root) >= capacity)
+	{
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+	strcpy(buf, root);
+	auto append = [&](const char *part) -> bool
+	{
+		if (!part || !*part)
+			return true;
+		size_t used = strlen(buf);
+		if (used && buf[used - 1] != '/')
+		{
+			if (used + 1 >= capacity)
+			{
+				errno = ENAMETOOLONG;
+				return false;
+			}
+			buf[used++] = '/';
+			buf[used] = '\0';
+		}
+		return getHostFileName(buf + used, capacity - used, drv, buf, part);
+	};
+	for (auto it = parts.rbegin(); it != parts.rend(); ++it)
+		if (!append(*it))
+			return NULL;
+	if (!append(name))
+		return NULL;
 	return buf;
 }
 
-char *CMacXFS::cookie2Pathname(XfsCookie *fc, const char *name, char *buf, bool insert_root)
+char *CMacXFS::cookie2Pathname(XfsCookie *fc, const char *name, char *buf,
+	size_t capacity, bool insert_root)
 {
-	return cookie2Pathname(fc->drv, fc->index, name, buf, insert_root);
+	return cookie2Pathname(fc->drv, fc->index, name, buf, capacity, insert_root);
 }
 
 
 
 DIR *CMacXFS::host_opendir(const char *fpathName)
 {
-	DIR *result = opendir(fpathName);
-	if (result || errno != ENOTDIR)
-		return result;
-
-	// follow symlink when needed
-	struct stat statBuf;
-	if (!lstat(fpathName, &statBuf) && S_ISLNK(statBuf.st_mode))
-	{
-		char temp[MAXPATHNAMELEN];
-		if (host_readlink(fpathName, temp, sizeof(temp) - 1))
-			return host_opendir(temp);
-	}
-
-	return NULL;
+	// POSIX already follows directory links and detects ELOOP. Feeding
+	// Atari paths returned by host_readlink() back into opendir is invalid.
+	return opendir(fpathName);
 }
 
 
 char *CMacXFS::host_readlink(const char *pathname, char *target, int len)
 {
-	int rv;
-	int i;
-
-	target[0] = '\0';
-	if ((rv = (int)readlink(pathname, target, len)) < 0)
-		return NULL;
-
-	// put the trailing \0
-	target[rv] = '\0';
-
-	// relative host fs symlinks are left alone. The kernel will parse them
-	if (target[0] != *DIRSEPARATOR && target[0] != '\\' && target[1] != ':')
-		return target;
-	// convert to real path (example: "/tmp/../file" -> "/file")
+	if (!target || len <= 0)
 	{
-		char *tmp = my_canonicalize_file_name(target, false);
-		if (tmp == NULL)
-			return target;
-		size_t nameLen = strlen(tmp);
-		for (i = 0; i < NDRVS; i++)
+		errno = EINVAL;
+		return NULL;
+	}
+	// Read one byte beyond the usable string capacity to detect truncation.
+	std::vector<char> raw(size_t(len), '\0');
+	const ssize_t rv = readlink(pathname, raw.data(), raw.size());
+	if (rv < 0)
+		return NULL;
+	if (rv >= len)
+	{
+		target[0] = '\0';
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+	raw[size_t(rv)] = '\0';
+	std::string value(raw.data(), size_t(rv));
+	if (!value.empty() && value[0] == '/')
+	{
+		char *canonical = my_canonicalize_file_name(value.c_str(), false);
+		if (!canonical)
 		{
-			struct mount_info *drv = &drives[i];
-			if (drv->drv_valid)
+			errno = ENOMEM;
+			return NULL;
+		}
+		const std::string resolved(canonical);
+		free(canonical);
+		size_t bestLength = 0;
+		int bestDrive = -1;
+		for (int i = 0; i < NDRVS; ++i)
+		{
+			if (!drives[i].drv_valid || !drives[i].host_root)
+				continue;
+			char *canonicalRoot = my_canonicalize_file_name(drives[i].host_root->m_hostname, false);
+			if (!canonicalRoot)
 			{
-				size_t hrLen = strlen(drv->host_root->m_hostname);
-				if (hrLen == 0 || hrLen > nameLen)
-					continue;
-				if (strncmp(drv->host_root->m_hostname, tmp, hrLen) == 0)
-				{
-					// target drive found; replace the hosts root directory
-					// with the mount point
-					strncpy(target, drv->mount_point, len);
-					int mLen = (int)strlen(drv->mount_point);
-					if (mLen < len)
-						strncpy(target + mLen, tmp + hrLen, len - mLen);
-					break;
-				}
+				errno = ENOMEM;
+				return NULL;
+			}
+			std::string root(canonicalRoot);
+			free(canonicalRoot);
+			while (root.size() > 1 && root.back() == '/')
+				root.pop_back();
+			const bool match = !root.empty() &&
+				(resolved == root || (resolved.compare(0, root.size(), root) == 0 &&
+				 (root == "/" || (resolved.size() > root.size() && resolved[root.size()] == '/'))));
+			if (match && (bestDrive < 0 || root.size() > bestLength))
+			{
+				bestDrive = i;
+				bestLength = root.size();
 			}
 		}
-		free(tmp);
+		if (bestDrive >= 0)
+		{
+			size_t suffix = bestLength;
+			while (suffix < resolved.size() && resolved[suffix] == '/')
+				++suffix;
+			value = std::string(drives[bestDrive].mount_point) + resolved.substr(suffix);
+			for (char &c : value)
+				if (c == '/') c = '\\';
+		}
 	}
-	
+	if (value.size() >= size_t(len))
+	{
+		target[0] = '\0';
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+	memcpy(target, value.c_str(), value.size() + 1);
 	return target;
 }
 
 
-bool CMacXFS::getHostFileName(char *result, struct mount_info *drv, const char *pathName, const char *name)
+bool CMacXFS::getHostFileName(char *result, size_t capacity, struct mount_info *drv, const char *pathName, const char *name)
 {
 	struct stat statBuf;
 
 	// if the whole thing fails then take the requested name as is
 	// it also completes the path
+	if (strlen(name) >= capacity)
+	{
+		errno = ENAMETOOLONG;
+		return false;
+	}
 	strcpy(result, name);
 
 	if (!strpbrk(name, "*?") && // if is it NOT a mask
@@ -4758,6 +4743,13 @@ bool CMacXFS::getHostFileName(char *result, struct mount_info *drv, const char *
 		}
 
 	lbl_final:
+		if (strlen(finalName) >= capacity)
+		{
+			if (dh != NULL)
+				closedir(dh);
+			errno = ENAMETOOLONG;
+			return false;
+		}
 		strcpy(result, finalName);
 
 		// in case of halfsensitive filesystem,

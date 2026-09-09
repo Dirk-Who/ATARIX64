@@ -9,13 +9,15 @@ repository continues the original AtariX code base and maintains it for
 current 64-bit Macs, with the primary focus on native Apple Silicon systems.
 
 The current public release is
-[ATARIX-A64-0.6.6](https://github.com/Dirk-Who/ATARIX64/releases/tag/ATARIX-A64-0.6.6-Release).
+[ATARIX-A64-0.7](https://github.com/Dirk-Who/ATARIX64/releases/tag/ATARIX-A64-0.7-Release).
 
 - [Apple Silicon build instructions](APPLE_SILICON.md)
 - [Current feature overview](FEATURES.md)
 - [Development history](HISTORY.md)
 - [Detailed German change log (PDF)](docs/AtariX_Aenderungen_0.3_bis_0.6.6.pdf)
 - [Musashi integration notes](MUSASHI.md)
+- [Version 0.7 release notes](RELEASE_NOTES_0.7.md)
+- [Safety fixes and regression tests](SAFETY_FIXES.md)
 
 ## Origin and attribution
 
@@ -39,12 +41,15 @@ Andreas Kromke's actively developed technical successor is
 other modernisations may also provide useful reference material for future
 AtariX development.
 
-## What AtariX 0.6.6 provides
+## What AtariX 0.7 provides
 
 - Native `arm64` application for Apple Silicon Macs running macOS 11 or newer
 - Musashi-based MC68020 emulation, updated for the Apple Silicon port
 - Resizable, HiDPI-aware and native macOS fullscreen display
-- Arbitrary Atari screen sizes and colour depths, including 32-bit output
+- Configurable Atari screen sizes and colour depths, including 32-bit output
+  (maximum width 2032 pixels in 32-bit mode with the bundled drivers)
+- Bounded pixel conversion, RAM/VRAM access and filesystem path construction
+- Corrected Pixmap dimensions and filesystem link-root handling
 - Corrected RGB/VDI colour conversion and framebuffer byte-lane handling
 - Correct mouse-coordinate mapping in windowed and fullscreen modes
 - Smooth fullscreen mouse movement without the earlier performance regression

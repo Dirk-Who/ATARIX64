@@ -59,7 +59,7 @@ lipo -info build/Build/Products/Release/AtariX.app/Contents/Frameworks/SDL2.fram
   target.
 - The Intel-only bundled SDL 2 framework can be replaced reproducibly with
   the official universal SDL 2.32.10 framework.
-- The current 0.6.6 release supports resizable, HiDPI-aware and native
+- The current 0.7 release supports resizable, HiDPI-aware and native
   fullscreen output with aspect-ratio-preserving scaling and corrected mouse
   coordinates. Fullscreen mouse motion is coalesced for smooth input without
   reducing emulation performance. Mouse wheels and MacBook trackpads generate

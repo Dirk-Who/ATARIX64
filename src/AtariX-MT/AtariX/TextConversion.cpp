@@ -48,40 +48,45 @@ int CTextConversion::Init(void)
 }
 
 
-void CTextConversion::Atari2HostUtf8Copy(char *dst, const char *src, size_t count)
+bool CTextConversion::Atari2HostUtf8Copy(char *dst, const char *src, size_t count)
 {
-	unsigned short ch;
-	
-	while (count > 1)
+	if (!dst || !src || count == 0)
+		return false;
+	while (*src)
 	{
-		ch = (unsigned char)*src++;
-		if (ch == 0)
-			break;
-		ch = atari_to_utf16[ch];
-		if (ch < 0x80)
+		const unsigned short ch = atari_to_utf16[(unsigned char)*src];
+		const size_t bytes = ch < 0x80 ? 1 : ch < 0x800 ? 2 : 3;
+		if (count <= bytes)
 		{
+			*dst = '\0';
+			return false;
+		}
+		if (bytes == 1)
 			*dst++ = ch;
-			count--;
-		} else if (ch < 0x800 || count < 3)
+		else if (bytes == 2)
 		{
-			*dst++ = ((ch >> 6) & 0x3f) | 0xc0;
+			*dst++ = ((ch >> 6) & 0x1f) | 0xc0;
 			*dst++ = (ch & 0x3f) | 0x80;
-			count -= 2;
-		} else 
+		}
+		else
 		{
 			*dst++ = ((ch >> 12) & 0x0f) | 0xe0;
 			*dst++ = ((ch >> 6) & 0x3f) | 0x80;
 			*dst++ = (ch & 0x3f) | 0x80;
-			count -= 3;
 		}
+		++src;
+		count -= bytes;
 	}
-	if (count > 0)
-		*dst = '\0';
+	*dst = '\0';
+	return true;
 }
 
 
-void CTextConversion::Host2AtariUtf8Copy(char *dst, const char *src, size_t count)
+bool CTextConversion::Host2AtariUtf8Copy(char *dst, const char *src, size_t count)
 {
+	if (!dst || !src || count == 0)
+		return false;
+	*dst = '\0';
 #ifdef __APPLE__
 	/* MacOSX uses decomposed strings, normalize them first */
 	CFMutableStringRef theString = CFStringCreateMutable(NULL, 0);
@@ -99,13 +104,16 @@ void CTextConversion::Host2AtariUtf8Copy(char *dst, const char *src, size_t coun
 		c = utf16_to_atari[ch];
 		if (c >= 0x100)
 		{
+			const size_t needed = ch < 0x80 ? 1 : ch < 0x800 ? 2 : 3;
+			if (count <= needed)
+				break;
 			charset_conv_error(ch);
 			/* not convertible. return utf8-sequence to avoid producing duplicate filenames */
 			if (ch < 0x80)
 			{
 				*dst++ = ch;
 				count--;
-			} else if (ch < 0x800 || count < 3)
+			} else if (ch < 0x800)
 			{
 				*dst++ = ((ch >> 6) & 0x3f) | 0xc0;
 				*dst++ = (ch & 0x3f) | 0x80;
@@ -129,6 +137,7 @@ void CTextConversion::Host2AtariUtf8Copy(char *dst, const char *src, size_t coun
 		*dst = 0;
 	}
 	CFRelease(theString);
+	return idx == len;
 #else
 	unsigned short ch;
 	unsigned short c;
@@ -153,6 +162,8 @@ void CTextConversion::Host2AtariUtf8Copy(char *dst, const char *src, size_t coun
 		c = utf16_to_atari[ch];
 		if (c >= 0x100)
 		{
+			if (count <= bytes)
+				break;
 			charset_conv_error(ch);
 			/* not convertible. return utf8-sequence to avoid producing duplicate filenames */
 			*dst++ = *src++;
@@ -172,6 +183,7 @@ void CTextConversion::Host2AtariUtf8Copy(char *dst, const char *src, size_t coun
 	{
 		*dst = 0;
 	}
+	return *src == '\0';
 #endif
 }
 

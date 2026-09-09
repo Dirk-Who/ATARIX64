@@ -189,6 +189,25 @@ void EmulationRunner::Init(void)
  *
  *********************************************************************************************************/
 
+static unsigned AtariX_CompatibleScreenWidth(unsigned width, unsigned colourMode)
+{
+	// Bundled MFM drivers mask rowBytes with 0x1fff. Leave room for
+	// their 16-pixel alignment; reject unsupported pitches before allocation.
+	if (width < 320) width = 320;
+	unsigned maxWidth = 4096;
+	if (colourMode == atariScreenMode16M)
+		maxWidth = 2032;
+	else if (colourMode == atariScreenModeHC)
+		maxWidth = 4080;
+	if (width > maxWidth)
+		width = maxWidth;
+	if (colourMode == atariScreenMode4ip ||
+		colourMode == atariScreenMode16ip)
+		width = (width + 15) & ~15u;
+
+	return width;
+}
+
 void EmulationRunner::Config
 (
 	const char *atariKernelPathUrl,
@@ -249,7 +268,11 @@ void EmulationRunner::Config
 	else
 		Globals.s_Preferences.m_atariScreenColourMode = atariScreenMode16M;
 
-	DebugInfo("%s(): atariScreenColourMode (%u)", __func__, atariScreenColourMode);
+	m_atariScreenW = AtariX_CompatibleScreenWidth(m_atariScreenW,
+		Globals.s_Preferences.m_atariScreenColourMode);
+
+	DebugInfo("%s(): atariScreenColourMode (%u), effective width %u",
+		__func__, atariScreenColourMode, m_atariScreenW);
 
 	m_atariScreenStretchX = atariScreenStretchX;
 	m_atariScreenStretchY = atariScreenStretchY;
@@ -491,6 +514,18 @@ static void ConvertSurface
 	bool bStretchX, bool bStretchY
 )
 {
+	// Interleaved planes require complete 16-pixel source groups, even
+	// when only part of the final group is visible.
+	if (!pSrc || !pDst || !pSrc->format || !pSrc->pixels || !pDst->pixels ||
+		pSrc->w <= 0 || pSrc->h <= 0 || pDst->w < pSrc->w || pDst->h < pSrc->h)
+		return;
+	const size_t sourceBytes = pSrc->userdata == (void *)1
+		? ((size_t(pSrc->w) + 15) / 16) * pSrc->format->BitsPerPixel * 2
+		: (size_t(pSrc->w) * pSrc->format->BitsPerPixel + 7) / 8;
+	if (pSrc->pitch < 0 || size_t(pSrc->pitch) < sourceBytes ||
+		pDst->pitch < 0 || size_t(pDst->pitch) < size_t(pSrc->w) * 4)
+		return;
+
 	unsigned x,y;
 	const uint8_t *ps8 = (const uint8_t *) pSrc->pixels;
 	uint8_t *pd8 = (uint8_t *) pDst->pixels;
@@ -558,14 +593,8 @@ static void ConvertSurface
 				for (x = 0; x < pSrc->w; x += 8)
 				{
 					c = *ps8x++;		// get one byte, 8 pixels
-					*pd32x++ = (c & 0x80) ? col1 : col0;
-					*pd32x++ = (c & 0x40) ? col1 : col0;
-					*pd32x++ = (c & 0x20) ? col1 : col0;
-					*pd32x++ = (c & 0x10) ? col1 : col0;
-					*pd32x++ = (c & 0x08) ? col1 : col0;
-					*pd32x++ = (c & 0x04) ? col1 : col0;
-					*pd32x++ = (c & 0x02) ? col1 : col0;
-					*pd32x++ = (c & 0x01) ? col1 : col0;
+					for (unsigned bit = 0; bit < 8 && x + bit < unsigned(pSrc->w); ++bit)
+						*pd32x++ = (c & (0x80 >> bit)) ? col1 : col0;
 				}
 
 /* Let SDL do that in EmulatorWindowUpdate()
@@ -618,7 +647,7 @@ static void ConvertSurface
 						index0 >>= 1;
 					}
 					
-					for (i = 0; i < 16; i++)
+					for (i = 0; i < 16 && x + i < unsigned(pSrc->w); i++)
 					{
 						// indexed colour, we must access the palette table here
 						*pd32x++ = palette[ca[i]];
@@ -658,7 +687,8 @@ static void ConvertSurface
 		//			*pd32x++ = (index0 << 4) | (index0 << 12L) | (index0 << 20L) | (0xff000000);
 					*pd32x++ = palette[index0];
 		//			*pd32x++ = (index1 << 4) | (index1 << 12L) | (index1 << 20L) | (0xff000000);
-					*pd32x++ = palette[index1];
+					if (x + 1 < unsigned(pSrc->w))
+						*pd32x++ = palette[index1];
 				}
 				
 				// advance to next line
@@ -725,7 +755,7 @@ static void ConvertSurface
 						index02 >>= 1;
 					}
 
-					for (i = 0; i < 16; i++)
+					for (i = 0; i < 16 && x + i < unsigned(pSrc->w); i++)
 					{
 						// indexed colour, we must access the palette table here
 						*pd32x++ = palette[ca[i]];
@@ -1042,7 +1072,9 @@ void EmulationRunner::_OpenWindow(void)
 		DebugError("SDL %s", SDL_GetError());
 		//exit(-1);
 	}
-	UpdateTextureFromRect(m_sdl_texture, m_sdl_surface, &r);
+	// SDL_FillRect clips r, but SDL_UpdateTexture must not read an
+	// unclipped 256-pixel rectangle from a 200-line surface.
+	UpdateTextureFromRect(m_sdl_texture, m_sdl_surface, NULL);
 #endif
 //	UpdateTextureFromRect(m_sdl_texture, m_sdl_surface, NULL);
 
@@ -1051,7 +1083,7 @@ void EmulationRunner::_OpenWindow(void)
 	 */
 
 	// create ancient style Pixmap structure to be passed to the Atari kernel, from m_sdl_surface
-	assert(m_sdl_atari_surface->pitch < 0x4000);			// Pixmap limit and thus limit for Atari
+	assert(m_sdl_atari_surface->pitch < 0x2000);			// Pixmap limit and thus limit for Atari
 	assert((m_sdl_atari_surface->pitch & 3) == 0);		// pitch (alias rowBytes) must be dividable by 4
 	
 	MXVDI_PIXMAP *pixmap = &m_EmulatorScreen.m_PixMap;
@@ -1062,8 +1094,8 @@ void EmulationRunner::_OpenWindow(void)
 	pixmap->rowBytes      = m_sdl_atari_surface->pitch | 0x8000;	// 0x4000 and 0x8000 are flags
 	pixmap->bounds_top    = 0;
 	pixmap->bounds_left   = 0;
-	pixmap->bounds_bottom = m_sdl_atari_surface->h - 1;
-	pixmap->bounds_right  = m_sdl_atari_surface->w - 1;
+	pixmap->bounds_bottom = m_sdl_atari_surface->h;
+	pixmap->bounds_right  = m_sdl_atari_surface->w;
 	pixmap->pmVersion     = 4;							// should mean: pixmap base address is 32-bit address
 	pixmap->packType      = 0;							// unpacked?
 	pixmap->packSize      = 0;							// unimportant?

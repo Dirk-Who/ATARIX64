@@ -295,6 +295,22 @@ m68k_addr_type m68k_read_memory_8(m68k_addr_type address)
 
 m68k_addr_type m68k_read_memory_16(m68k_addr_type address)
 {
+	// Validate the complete span without overflowing the address arithmetic.
+	if (address >= Adr68kVideoEnd || Adr68kVideoEnd - address < 2)
+	{
+		pTheMagiC->SendBusError(address, "read 16 bit");
+		return 0xffff;
+	}
+	// Unaligned accesses can straddle separate RAM/VRAM allocations or
+	// endian-swizzled video words. Byte accesses preserve guest byte order.
+	if (address & 1)
+	{
+		uint32_t result = 0;
+		for (unsigned i = 0; i < 2; ++i)
+			result = (result << 8) | m68k_read_memory_8(address + i);
+		return result;
+	}
+
 	uint16_t val;
 
 #if !COUNT_CYCLES
@@ -339,6 +355,22 @@ m68k_addr_type m68k_read_memory_16(m68k_addr_type address)
 
 m68k_addr_type m68k_read_memory_32(m68k_addr_type address)
 {
+	// Validate the complete span without overflowing the address arithmetic.
+	if (address >= Adr68kVideoEnd || Adr68kVideoEnd - address < 4)
+	{
+		pTheMagiC->SendBusError(address, "read 32 bit");
+		return 0xffffffff;
+	}
+	// Unaligned accesses can straddle separate RAM/VRAM allocations or
+	// endian-swizzled video words. Byte accesses preserve guest byte order.
+	if (address & 3)
+	{
+		uint32_t result = 0;
+		for (unsigned i = 0; i < 4; ++i)
+			result = (result << 8) | m68k_read_memory_8(address + i);
+		return result;
+	}
+
 	uint32_t val;
 
 #if !COUNT_CYCLES
@@ -439,6 +471,18 @@ void m68k_write_memory_8(m68k_addr_type address, m68k_data_type value)
 
 void m68k_write_memory_16(m68k_addr_type address, m68k_data_type value)
 {
+	if (address >= Adr68kVideoEnd || Adr68kVideoEnd - address < 2)
+	{
+		pTheMagiC->SendBusError(address, "write 16 bit");
+		return;
+	}
+	if (address & 1)
+	{
+		for (unsigned i = 0; i < 2; ++i)
+			m68k_write_memory_8(address + i, (value >> (8 * (1 - i))) & 0xff);
+		return;
+	}
+
 #ifdef _DEBUG_WRITEPROTECT_ATARI_OS
 	if	((address >= AdrOsRomStart-1) && (address < AdrOsRomEnd))
 	{
@@ -491,6 +535,18 @@ void m68k_write_memory_16(m68k_addr_type address, m68k_data_type value)
 
 void m68k_write_memory_32(m68k_addr_type address, m68k_data_type value)
 {
+	if (address >= Adr68kVideoEnd || Adr68kVideoEnd - address < 4)
+	{
+		pTheMagiC->SendBusError(address, "write 32 bit");
+		return;
+	}
+	if (address & 3)
+	{
+		for (unsigned i = 0; i < 4; ++i)
+			m68k_write_memory_8(address + i, (value >> (8 * (3 - i))) & 0xff);
+		return;
+	}
+
 #ifdef _DEBUG_WRITEPROTECT_ATARI_OS
 	if	((address >= AdrOsRomStart - 3) && (address < AdrOsRomEnd))
 	{
@@ -1363,7 +1419,7 @@ int CMagiC::Init(CMagiCScreen *pMagiCScreen, CXCmd *pXCmd)
 	(void) CMagiCKeyboard::Init();
 
 	m_RAM68ksize = Globals.s_Preferences.m_AtariMemSize;
-	numVideoLines = m_pMagiCScreen->m_PixMap.bounds_bottom - m_pMagiCScreen->m_PixMap.bounds_top + 1;
+	numVideoLines = m_pMagiCScreen->m_PixMap.bounds_bottom - m_pMagiCScreen->m_PixMap.bounds_top;
 	m_FgBufferLineLenInBytes = (m_pMagiCScreen->m_PixMap.rowBytes & 0x3fff);
 	m_Video68ksize = m_FgBufferLineLenInBytes * numVideoLines;
 	// Atari-Speicher holen

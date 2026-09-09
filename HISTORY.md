@@ -106,10 +106,24 @@ notices. It is not an official release by the original author.
 - Translated scroll input into compatible Atari cursor-key events
 - Confirmed operation with a Logitech scrolling mouse and a MacBook trackpad
 
+### 0.7 — memory, display and filesystem safety
+
+- Bounded partial pixel groups and complete 16-/32-bit RAM/VRAM accesses
+- Corrected exclusive Pixmap dimensions and initial texture upload
+- Limited screen widths to the 13-bit row-byte capacity of the bundled drivers
+- Bounded host paths and text conversion, corrected root links and dot/parent paths
+- Propagated directory-creation errors instead of returning false success
+- Added 74,339 host assertions under AddressSanitizer
+- User reported successful practical operation, including fullscreen, with no
+  issues noticed so far; this is not exhaustive guest compatibility coverage
+
+Details: [0.7 release notes](RELEASE_NOTES_0.7.md) and
+[safety changes and test plan](SAFETY_FIXES.md). The historical PDF ends at 0.6.6.
+
 ## Release policy
 
-Release builds are compiled by GitHub Actions for Apple Silicon, include the
+Release builds are compiled with Xcode for Apple Silicon and checked by GitHub Actions, include the
 required SDL2 framework, and are ad-hoc signed and verified. They are not
 Apple-notarised. Every functional change should first be tested under MagiC
-and then recorded here and in the detailed change log before publishing a new
+and then recorded here and in the versioned release notes before publishing a new
 release.

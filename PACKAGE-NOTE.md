@@ -1,15 +1,19 @@
 # Consolidated Apple Silicon source package
 
 This package contains the source used for the Apple Silicon AtariX build.
-The application version is 0.4F.
+The application version is 0.7. Current changes and validation limits are
+documented in `RELEASE_NOTES_0.7.md` and `SAFETY_FIXES.md`.
 
 Important:
 
-- No prebuilt `AtariX.app` is included. Older binaries do not contain all
-  source fixes.
+- The source-only release ZIP does not include a prebuilt application.
+  The repository's `release/AtariX.app.zip` and the GitHub release application
+  asset contain the 0.7 build. Do not substitute older application archives.
 - No bundled `SDL2.framework` is included. Run `scripts/bootstrap-sdl2.sh`
   once before building. The script preserves the framework symlinks on
   macOS 26 and avoids the earlier `ditto: ... Is a directory` failure.
+## Historical Apple Silicon port changes (0.4 series)
+
 - The obsolete forced `M_DRV_READONLY` assignments have been removed from
   `MacXFS.cpp`, so mapped host directories are writable when macOS permits it.
 - `XFSDevFunctions()` rebuilds the native drive pointer from the emulated

@@ -27,8 +27,9 @@ class CTextConversion
    public:
 	// Initialisierung
 	static int Init( void );
-	static void Atari2HostUtf8Copy(char *dst, const char *src, size_t count);
-	static void Host2AtariUtf8Copy(char *dst, const char *src, size_t count);
+	// False means the destination was too small; it remains NUL-terminated.
+	static bool Atari2HostUtf8Copy(char *dst, const char *src, size_t count);
+	static bool Host2AtariUtf8Copy(char *dst, const char *src, size_t count);
 
    private:
 	// Funktionen

@@ -59,7 +59,7 @@
 #endif
 
 #define NAME_STRING "AtariX"
-#define VERSION_STRING "0.5"
+#define VERSION_STRING "0.7"
 
 #if defined(__APPLE__)
 #define OS_TYPE "macOS"
