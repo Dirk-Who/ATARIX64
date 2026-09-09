@@ -99,7 +99,7 @@ code += '#line 1 "safety_tests.cpp"\n'+(repo/'tests/safety_tests.cpp').read_text
 (work/'generated.cpp').write_text(code)
 cmd=['clang++','-x','c++','-std=c++17','-O1','-g','-fsanitize=address',
      '-fno-omit-frame-pointer','-Wno-deprecated-declarations',
-     '-I'+str(src),'-I'+str(src/'SDL2.framework/Headers'),
+     '-I'+str(src),'-F'+str(src),'-I'+str(src/'SDL2.framework/Headers'),
      str(work/'generated.cpp'),str(src/'TextConversion.cpp'),str(src/'maptab.c'),
      '-framework','CoreFoundation','-o',str(work/'safety_tests')]
 subprocess.run(cmd,check=True)
