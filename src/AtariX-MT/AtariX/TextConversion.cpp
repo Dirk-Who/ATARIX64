@@ -31,6 +31,121 @@
 #include "Debug.h"
 #include "TextConversion.h"
 #include "maptab.h"
+#include <cerrno>
+#include <cstring>
+#include <string>
+
+namespace {
+bool filenameError(char *dst, size_t count, int error)
+{
+	if (dst && count) dst[0] = 0;
+	errno = error;
+	return false;
+}
+
+bool exactAtariCharacter(unsigned ch)
+{
+	return ch < 0x10000 && utf16_to_atari[ch] < 256 &&
+		atari_to_utf16[utf16_to_atari[ch]] == ch;
+}
+
+bool readUtf8(const unsigned char *s, size_t len, size_t &pos, unsigned &ch)
+{
+	unsigned first = s[pos++];
+	if (first < 0x80) { ch = first; return true; }
+	unsigned extra, minimum;
+	if (first >= 0xc2 && first <= 0xdf) { extra = 1; minimum = 0x80; ch = first & 31; }
+	else if (first >= 0xe0 && first <= 0xef) { extra = 2; minimum = 0x800; ch = first & 15; }
+	else if (first >= 0xf0 && first <= 0xf4) { extra = 3; minimum = 0x10000; ch = first & 7; }
+	else return false;
+	if (extra > len - pos) return false;
+	while (extra--) {
+		unsigned c = s[pos++];
+		if ((c & 0xc0) != 0x80) return false;
+		ch = (ch << 6) | (c & 63);
+	}
+	return ch >= minimum && ch <= 0x10ffff && !(ch >= 0xd800 && ch <= 0xdfff);
+}
+
+void appendUtf8(std::string &out, unsigned ch)
+{
+	if (ch < 0x80) out += char(ch);
+	else {
+		if (ch < 0x800) out += char(0xc0 | (ch >> 6));
+		else {
+			if (ch < 0x10000) out += char(0xe0 | (ch >> 12));
+			else {
+				out += char(0xf0 | (ch >> 18));
+				out += char(0x80 | ((ch >> 12) & 63));
+			}
+			out += char(0x80 | ((ch >> 6) & 63));
+		}
+		out += char(0x80 | (ch & 63));
+	}
+}
+}
+
+// ~{HHHH} (4-6 hex digits) represents a Unicode scalar outside the
+// Atari table. A literal "~{" is quoted as "~{007E}{". Ordinary ASCII
+// (including DOS ~1 names) and Atari characters retain their encoding.
+// Do not normalize: NFC and NFD may be distinct on a mapped filesystem.
+bool CTextConversion::HostFilenameToAtari(char *dst, const char *src, size_t count)
+{
+	if (!dst || !src || !count) return filenameError(dst, count, EINVAL);
+	const size_t len = strnlen(src, MAXPATHNAMELEN);
+	if (len == MAXPATHNAMELEN) return filenameError(dst, count, ENAMETOOLONG);
+	std::string out;
+	for (size_t pos = 0; pos < len;) {
+		unsigned ch;
+		if (!readUtf8((const unsigned char *)src, len, pos, ch))
+			return filenameError(dst, count, EILSEQ);
+		if (exactAtariCharacter(ch) && !(ch == '~' && src[pos] == '{'))
+			out += char(utf16_to_atari[ch]);
+		else {
+			char escaped[12];
+			snprintf(escaped, sizeof(escaped), "~{%04X}", ch);
+			out += escaped;
+		}
+		if (out.size() >= count) return filenameError(dst, count, ENAMETOOLONG);
+	}
+	memcpy(dst, out.c_str(), out.size() + 1);
+	return true;
+}
+
+bool CTextConversion::AtariFilenameToHost(char *dst, const char *src, size_t count)
+{
+	if (!dst || !src || !count) return filenameError(dst, count, EINVAL);
+	const size_t len = strnlen(src, MAXPATHNAMELEN);
+	if (len == MAXPATHNAMELEN) return filenameError(dst, count, ENAMETOOLONG);
+	std::string out;
+	for (size_t pos = 0; pos < len;) {
+		unsigned ch = atari_to_utf16[(unsigned char)src[pos++]];
+		if (ch == '~' && src[pos] == '{') {
+			++pos;
+			ch = 0;
+			unsigned digits = 0;
+			while (pos < len && src[pos] != '}') {
+				unsigned char c = src[pos++];
+				unsigned value = c >= '0' && c <= '9' ? c - '0' :
+					c >= 'A' && c <= 'F' ? c - 'A' + 10 :
+					c >= 'a' && c <= 'f' ? c - 'a' + 10 : 16;
+				if (value == 16 || ++digits > 6) return filenameError(dst, count, EILSEQ);
+				ch = (ch << 4) | value;
+			}
+			if (pos == len || digits < 4 || ch > 0x10ffff ||
+				(ch >= 0xd800 && ch <= 0xdfff)) return filenameError(dst, count, EILSEQ);
+			++pos;
+			// No alternate encodings of NUL, separators, dot, or regular
+			// Atari bytes. This also prevents escape-based path traversal.
+			if (exactAtariCharacter(ch) && !(ch == '~' && src[pos] == '{'))
+				return filenameError(dst, count, EILSEQ);
+		}
+		appendUtf8(out, ch);
+		if (out.size() >= count) return filenameError(dst, count, ENAMETOOLONG);
+	}
+	memcpy(dst, out.c_str(), out.size() + 1);
+	return true;
+}
 
 // statische Attribute:
 

@@ -26,6 +26,7 @@ static NSString *DMKAtariDrivesTableKey = @"atariDrivesTable";
 static NSString *DMKAtariDrivesFlagsKey = @"atariDrivesFlags";
 static NSString *DMKAtariScreenStretchXKey = @"atariScreenStretchX";
 static NSString *DMKAtariScreenStretchYKey = @"atariScreenStretchY";
+static NSString *DMKAtariDisplayRefreshRateKey = @"atariDisplayRefreshRate";
 
 @implementation AppDelegate
 
@@ -77,6 +78,8 @@ Of course, this assumes your delegate responds to shouldHandleEvents and handleE
 
 	NSUserDefaultsController *sharedController = [NSUserDefaultsController sharedUserDefaultsController];
 	NSUserDefaults *myDefaults = [sharedController defaults /* values ?*/];
+    [myDefaults registerDefaults:@{DMKAtariDisplayRefreshRateKey: @50}];
+    EmulationSetDisplayRefreshRate((unsigned)[myDefaults integerForKey:DMKAtariDisplayRefreshRateKey]);
 	BOOL atariAutostart = [myDefaults boolForKey:DMKAtariAutostartKey];
 	if (bRootFsValid && atariAutostart)
 	{
@@ -341,6 +344,20 @@ Of course, this assumes your delegate responds to shouldHandleEvents and handleE
  * Menüeintrag "Vollbildmodus"
  *
  ****************************************************************************************************/
+
+- (IBAction)actionSetDisplayRefreshRate:(id)sender
+{
+    EmulationSetDisplayRefreshRate((unsigned)[sender tag]);
+    NSUserDefaults *defaults = [[NSUserDefaultsController sharedUserDefaultsController] defaults];
+    [defaults setInteger:EmulationGetDisplayRefreshRate() forKey:DMKAtariDisplayRefreshRateKey];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)item
+{
+    if ([item action] == @selector(actionSetDisplayRefreshRate:))
+        [item setState:([item tag] == EmulationGetDisplayRefreshRate()) ? NSOnState : NSOffState];
+    return YES;
+}
 
 - (IBAction)actionToggleFullscreen:(id)sender
 {

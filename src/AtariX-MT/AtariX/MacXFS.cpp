@@ -518,6 +518,7 @@ int32_t CMacXFS::errnoHost2Mint(int unixerrno, int defaulttoserrno)
 		case EBUSY:   retval = TOS_EDRVNR; break;
 		case EISDIR:  retval = TOS_EISDIR; break;
 		case ENAMETOOLONG: retval = TOS_ERANGE; break;
+		case EILSEQ: retval = TOS_EINVAL; break;
 	}
 
 	return retval;
@@ -1237,8 +1238,8 @@ int32_t CMacXFS::xfs_path2DD
 			if (part.find(':') != std::string::npos)
 				return TOS_EPTHNF;
 			char hostName[MAXPATHNAMELEN];
-			if (!CTextConversion::Atari2HostUtf8Copy(hostName, part.c_str(), sizeof(hostName)))
-				return TOS_ERANGE;
+			if (!CTextConversion::AtariFilenameToHost(hostName, part.c_str(), sizeof(hostName)))
+				return errnoHost2Mint(errno, TOS_EINVAL);
 			char fullPath[MAXPATHNAMELEN];
 			if (!cookie2Pathname(fc.drv, dir, hostName, fullPath, sizeof(fullPath), true))
 				return errnoHost2Mint(errno, TOS_EPTHNF);
@@ -1353,7 +1354,8 @@ int32_t CMacXFS::_snext(MAC_DTA *dta)
 
 		/* Datei gefunden, passen Name und Attribut ? */
 
-		CTextConversion::Host2AtariUtf8Copy(atariname, dirEntry->d_name, sizeof(atariname));
+		if (!CTextConversion::HostFilenameToAtari(atariname, dirEntry->d_name, sizeof(atariname)))
+			return errnoHost2Mint(errno, TOS_EINVAL);
 		DebugInfo("CMacXFS::%s() -- directory entry found: \"%s\"", __FUNCTION__, atariname);
 
 		if (conv_path_elem(atariname, dosname))		// Konvertier. fuer Vergleich
@@ -1553,8 +1555,8 @@ int32_t CMacXFS::xfs_fopen(XfsCookie *fc, const char *name, uint16_t omode, uint
 	if ((fc->drv->drv_flags & M_DRV_READONLY) && (flags & O_CREAT))
 		return TOS_EWRPRO;
 
-	if (!CTextConversion::Atari2HostUtf8Copy(hostname, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(hostname, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, hostname, fpathName, sizeof(fpathName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 	
@@ -1662,8 +1664,8 @@ int32_t CMacXFS::xfs_fdelete(XfsCookie *dir, const char *name)
 	if (dir->drv->drv_flags & M_DRV_READONLY)
 		return TOS_EWRPRO;
 
-	if (!CTextConversion::Atari2HostUtf8Copy(hostname, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(hostname, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(dir, hostname, fpathName, sizeof(fpathName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
@@ -1715,15 +1717,15 @@ int32_t CMacXFS::xfs_link(XfsCookie *fromDir, char *fromname, XfsCookie *toDir, 
 
 	char ffromName[MAXPATHNAMELEN];
 	char fromName[MAXPATHNAMELEN];
-	if (!CTextConversion::Atari2HostUtf8Copy(fromName, fromname, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fromName, fromname, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fromDir, fromName, ffromName, sizeof(ffromName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
 	char ftoName[MAXPATHNAMELEN];
 	char toName[MAXPATHNAMELEN];
-	if (!CTextConversion::Atari2HostUtf8Copy(toName, toname, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(toName, toname, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(toDir, toName, ftoName, sizeof(ftoName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
@@ -1864,8 +1866,8 @@ int32_t CMacXFS::xfs_xattr(XfsCookie *fc, const char *name, XATTR *xattr, uint16
 		if (name[0] == '.' && !name[1])
 			name = "";		// "." wie leerer Name
 	}
-	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fName, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, fName, fname, sizeof(fname), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
@@ -1899,8 +1901,8 @@ int32_t CMacXFS::xfs_stat64(XfsCookie *fc, const char *name, MINT_STAT64 *statp)
 		if (name[0] == '.' && !name[1])
 			name = "";		// "." wie leerer Name
 	}
-	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fName, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, fName, fname, sizeof(fname), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
@@ -1948,8 +1950,8 @@ int32_t CMacXFS::xfs_attrib(XfsCookie *fc, const char *name, uint16_t rwflag, ui
 	if (rwflag && (fc->drv->drv_flags & M_DRV_READONLY))
 		return TOS_EWRPRO;
 
-	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fName, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 	
@@ -2032,8 +2034,8 @@ int32_t CMacXFS::xfs_fchown(XfsCookie *fc, const char *name, uint16_t uid, uint1
 	if (fname_is_invalid(name))
 		return TOS_EACCDN;
 
-	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fName, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 	if (stat(fpathName, &st) != 0)
@@ -2068,8 +2070,8 @@ int32_t CMacXFS::xfs_fchmod(XfsCookie *fc, const char *name, uint16_t fmode)
 		return TOS_EWRPRO;
 	if (fname_is_invalid(name))
 		return TOS_EACCDN;
-	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fName, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
@@ -2110,8 +2112,8 @@ int32_t CMacXFS::xfs_dcreate(XfsCookie *fc, const char *name)
 	if (fc->drv->drv_flags & M_DRV_READONLY)
 		return TOS_EWRPRO;
 
-	if (!CTextConversion::Atari2HostUtf8Copy(fName, name, MAXPATHNAMELEN))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fName, name, MAXPATHNAMELEN))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, fName, fpathName, sizeof(fpathName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 	if (mkdir(fpathName, 0755) != 0)
@@ -2178,7 +2180,9 @@ int32_t CMacXFS::xfs_DD2name(XfsCookie *fc, char *buf, uint16_t bufsiz)
 	if (!cookie2Pathname(fc, NULL, fpathName, sizeof(fpathName), false))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
-	CTextConversion::Host2AtariUtf8Copy(pathName + 1, fpathName, sizeof(pathName) - 1);
+	if (!CTextConversion::HostFilenameToAtari(pathName + 1, fpathName, sizeof(pathName) - 1))
+
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	pathName[0] = '\\';
 	len = strlen(pathName) + 1;
 	if (len > bufsiz)
@@ -2289,12 +2293,14 @@ int32_t CMacXFS::xfs_dreaddir(MAC_DIRHANDLE *dirh, uint16_t drv,
 		{
 			if (size < 13)
 				return TOS_ERANGE;
-			CTextConversion::Host2AtariUtf8Copy(atariname, dirEntry->d_name, sizeof(atariname));
+			if (!CTextConversion::HostFilenameToAtari(atariname, dirEntry->d_name, sizeof(atariname)))
+				return errnoHost2Mint(errno, TOS_EINVAL);
 			if (nameto_8_3(atariname, buf, 1, true))
 				continue;		// musste Dateinamen kuerzen
 		} else
 		{
-			CTextConversion::Host2AtariUtf8Copy(atariname, dirEntry->d_name, sizeof(atariname));
+			if (!CTextConversion::HostFilenameToAtari(atariname, dirEntry->d_name, sizeof(atariname)))
+				return errnoHost2Mint(errno, TOS_EINVAL);
 			len = strlen(atariname);
 			if (size < len + 5)
 				return TOS_ERANGE;
@@ -2630,12 +2636,12 @@ int32_t CMacXFS::xfs_symlink(XfsCookie *fc, const char *name, const char *toname
 	if (fc->drv->drv_flags & M_DRV_READONLY)
 		return TOS_EWRPRO;
 
-	if (!CTextConversion::Atari2HostUtf8Copy(ffromname, name, sizeof(ffromname)))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(ffromname, name, sizeof(ffromname)))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, ffromname, ffromName, sizeof(ffromName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
-	if (!CTextConversion::Atari2HostUtf8Copy(ftoname, toname, sizeof(ftoname)))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(ftoname, toname, sizeof(ftoname)))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	strd2upath(ftoname);
 	strcpy(ftoName, ftoname);
 
@@ -2766,8 +2772,8 @@ int32_t CMacXFS::xfs_readlink(XfsCookie *fc, const char *name,
 
 	/* Name erstellen und Alias auslesen	*/
 	/* ---------------------------------	*/
-	if (!CTextConversion::Atari2HostUtf8Copy(fname, name, sizeof(fname)))
-		return TOS_ERANGE;
+	if (!CTextConversion::AtariFilenameToHost(fname, name, sizeof(fname)))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!cookie2Pathname(fc, fname, fpathName, sizeof(fpathName), true))
 		return errnoHost2Mint(errno, TOS_EPTHNF);
 
@@ -2775,8 +2781,8 @@ int32_t CMacXFS::xfs_readlink(XfsCookie *fc, const char *name,
 		return errnoHost2Mint(errno, TOS_EFILNF);
 
 	char atariTarget[MAXPATHNAMELEN];
-	if (!CTextConversion::Host2AtariUtf8Copy(atariTarget, target, sizeof(atariTarget)))
-		return TOS_ERANGE;
+	if (!CTextConversion::HostFilenameToAtari(atariTarget, target, sizeof(atariTarget)))
+		return errnoHost2Mint(errno, TOS_EINVAL);
 	if (!buf || strlen(atariTarget) + 1 > bufsiz)
 		return TOS_ERANGE;
 	strcpy(buf, atariTarget);
@@ -2882,8 +2888,8 @@ int32_t CMacXFS::xfs_dcntl
 			{
 				t_set.actime = t_set.modtime = time(NULL);
 			}
-			if (!CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp)))
-				return TOS_ERANGE;
+			if (!CTextConversion::AtariFilenameToHost(temp, name, sizeof(temp)))
+				return errnoHost2Mint(errno, TOS_EINVAL);
 			if (!cookie2Pathname(fc, temp, fname, sizeof(fname), true))
 				return errnoHost2Mint(errno, TOS_EPTHNF);
 			if (utime(fname, &t_set))
@@ -2897,8 +2903,8 @@ int32_t CMacXFS::xfs_dcntl
 		break;
 
 	case MINT_FTRUNCATE:
-		if (!CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp)))
-			return TOS_ERANGE;
+		if (!CTextConversion::AtariFilenameToHost(temp, name, sizeof(temp)))
+			return errnoHost2Mint(errno, TOS_EINVAL);
 		if (!cookie2Pathname(fc, temp, fname, sizeof(fname), true))
 			return errnoHost2Mint(errno, TOS_EPTHNF);
 
@@ -2962,8 +2968,8 @@ int32_t CMacXFS::xfs_dcntl
 
 			case MMEX_GETRSRCLEN:
 				// Mac-Rsrc-Länge liefern
-				if (!CTextConversion::Atari2HostUtf8Copy(temp, name, sizeof(temp)))
-					return TOS_ERANGE;
+				if (!CTextConversion::AtariFilenameToHost(temp, name, sizeof(temp)))
+					return errnoHost2Mint(errno, TOS_EINVAL);
 				if (!cookie2Pathname(fc, temp, fname, sizeof(fname), true))
 					return errnoHost2Mint(errno, TOS_EPTHNF);
 				// strcat(fname, "/..namedfork/rsrc
@@ -4730,7 +4736,11 @@ bool CMacXFS::getHostFileName(char *result, size_t capacity, struct mount_info *
 					goto lbl_final;
 				}
 
-			nameto_8_3(dirEntry->d_name, testName, 1, false);
+			char atariName[MAXPATHNAMELEN], shortName[14];
+			if (!CTextConversion::HostFilenameToAtari(atariName, dirEntry->d_name, sizeof(atariName)) ||
+				nameto_8_3(atariName, shortName, 1, true) ||
+				!CTextConversion::AtariFilenameToHost(testName, shortName, sizeof(testName)))
+				continue;
 
 			if (strcmp(testName, filenamepart) == 0)
 			{
@@ -4759,7 +4769,7 @@ bool CMacXFS::getHostFileName(char *result, size_t capacity, struct mount_info *
 			bool isUpper = true;
 			for (char *curr = result; *curr; curr++)
 			{
-				if (*curr != toupper(*curr))
+				if (*curr != toupper((unsigned char)*curr))
 				{
 					isUpper = false;
 					break;

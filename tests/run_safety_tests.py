@@ -8,10 +8,29 @@ No emulator GUI or user MAGIC_C directory is opened. Fixtures stay in a
 new temporary directory. Generated sources retain the project's GPL notice.
 """
 from pathlib import Path
+import argparse
+import hashlib
+import json
 import os
 import subprocess
 import tempfile
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--copy-tree', type=Path, help='Optional read-only source tree; copy through MacXFS into temporary fixtures')
+args = parser.parse_args()
+
+def manifest(root):
+    entries = {}
+    for p in sorted(root.rglob('*')):
+        if p.is_symlink():
+            raise ValueError('Copy fixture must not contain symlinks: '+str(p))
+        name = p.relative_to(root).as_posix()
+        if p.is_dir(): entries[name] = {'kind':'directory'}
+        elif p.is_file(): entries[name] = {'kind':'file','bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+        else: raise ValueError('Unsupported fixture: '+str(p))
+    return entries
+
+original = manifest(args.copy_tree) if args.copy_tree else None
 repo = Path(__file__).resolve().parents[1]
 src = repo / 'src/AtariX-MT/AtariX'
 work = Path(tempfile.mkdtemp(prefix='atarix-regressions-'))
@@ -39,6 +58,9 @@ code += r'''
 #include <unistd.h>
 #include <dirent.h>
 #include <cerrno>
+#include <fcntl.h>
+#include <sys/time.h>
+#define O_BINARY 0
 #include <cctype>
 #include <limits.h>
 #include <CoreFoundation/CoreFoundation.h>
@@ -64,8 +86,9 @@ using m68k_data_type = uint32_t;
 uint32_t Adr68kVideo=1024, Adr68kVideoEnd=1088;
 uint8_t *OpcodeROM, *HostVideoAddr;
 bool bAtariVideoRamHostEndian=false;
-std::atomic<int> changed{0};
-std::atomic<int> *p_bVideoBufChanged=&changed;
+#include <stdatomic.h>
+atomic_char changed=0;
+atomic_char *p_bVideoBufChanged=&changed;
 using std::atomic_exchange;
 int busErrors=0;
 struct CMagiC {
@@ -81,12 +104,26 @@ for bits in [8,16,32]:
 code += extract('EmulationRunner.cpp','static void ConvertSurface\n')
 code += extract('EmulationRunner.cpp','static unsigned AtariX_CompatibleScreenWidth(')
 for sig in [
+    'static char *strd2upath(',
     'CMacXFS::XfsFsFile::XfsFsFile(', 'CMacXFS::XfsFsFile::~XfsFsFile()',
     'CMacXFS::XfsFsFile *CMacXFS::XfsFsFile::insert(',
     'CMacXFS::CMacXFS()', 'CMacXFS::~CMacXFS()',
     'unsigned char CMacXFS::ToUpper(', 'unsigned char CMacXFS::ToLower(',
     'int32_t CMacXFS::errnoHost2Mint(', 'bool CMacXFS::nameto_8_3(',
     'int CMacXFS::fname_is_invalid(',
+    'bool CMacXFS::filename_match(', 'bool CMacXFS::conv_path_elem(',
+    'int32_t CMacXFS::_snext(', 'int32_t CMacXFS::xfs_sfirst(',
+    'int32_t CMacXFS::xfs_snext(', 'int32_t CMacXFS::xfs_symlink(',
+    'int CMacXFS::flagsMagic2Host(', 'uint16_t CMacXFS::modeHost2Mint(',
+    'void CMacXFS::date_mac2dos(', 'time_t CMacXFS::date_dos2mac(',
+    'unsigned char CMacXFS::mac2DOSAttr(', 'void CMacXFS::convert_to_xattr(',
+    'int32_t CMacXFS::xfs_dopendir(', 'int32_t CMacXFS::xfs_dreaddir(',
+    'int32_t CMacXFS::xfs_dclosedir(', 'int32_t CMacXFS::xfs_xattr(',
+    'int32_t CMacXFS::xfs_fopen(', 'int32_t CMacXFS::xfs_fdelete(',
+    'int32_t CMacXFS::xfs_link(', 'int32_t CMacXFS::xfs_ddelete(',
+    'int32_t CMacXFS::dev_close(', 'int32_t CMacXFS::dev_read(',
+    'int32_t CMacXFS::dev_write(', 'static char *stru2dpath(',
+    'int32_t CMacXFS::xfs_DD2name(',
     'char *CMacXFS::cookie2Pathname(struct mount_info',
     'char *CMacXFS::cookie2Pathname(XfsCookie',
     'bool CMacXFS::getHostFileName(', 'DIR *CMacXFS::host_opendir(',
@@ -95,6 +132,7 @@ for sig in [
     'int32_t CMacXFS::xfs_readlink(', 'int32_t CMacXFS::xfs_dcreate(',
 ]:
     code += extract('MacXFS.cpp',sig)
+code += '#include "'+str(repo/'tests/filename_tests.inc')+'"\n'
 code += '#line 1 "safety_tests.cpp"\n'+(repo/'tests/safety_tests.cpp').read_text()
 (work/'generated.cpp').write_text(code)
 cmd=['clang++','-x','c++','-std=c++17','-O1','-g','-fsanitize=address',
@@ -104,5 +142,19 @@ cmd=['clang++','-x','c++','-std=c++17','-O1','-g','-fsanitize=address',
      '-framework','CoreFoundation','-o',str(work/'safety_tests')]
 subprocess.run(cmd,check=True)
 env=dict(os.environ,ASAN_OPTIONS='detect_leaks=0') # legacy XFS tree lifetime is not part of this patch
+if args.copy_tree:
+    env['ATARIX_COPY_TREE'] = str(args.copy_tree.resolve())
 subprocess.run([str(work/'safety_tests'),str(work)],check=True,env=env)
+if args.copy_tree:
+    assert manifest(args.copy_tree) == original, 'Source tree changed during test'
+    expected = {n:v for n,v in original.items() if Path(n).name != '.DS_Store'}
+    actual = manifest(work/'xfs-copy-target')
+    assert actual == expected, 'Copied names, directory structure or SHA-256 differ'
+    report = {'source':str(args.copy_tree.resolve()), 'source_unchanged':True,
+              'copied_files':sum(v['kind']=='file' for v in actual.values()),
+              'copied_directories':sum(v['kind']=='directory' for v in actual.values()),
+              'excluded_existing_xfs_metadata':[n for n in original if n not in expected],
+              'manifest':actual}
+    (work/'COPY-VERIFICATION.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+    print('PASS independent SHA-256/tree comparison; original source unchanged; excluded .DS_Store:', len(original)-len(expected))
 print('Generated test executable and fixtures:',work)

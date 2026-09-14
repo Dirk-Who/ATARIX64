@@ -65,6 +65,16 @@ void EmulationCloseWindow(void)
 	theEmulation.CloseWindow();
 }
 
+void EmulationSetDisplayRefreshRate(unsigned hz)
+{
+    theEmulation.SetDisplayRefreshRate(hz);
+}
+
+unsigned EmulationGetDisplayRefreshRate(void)
+{
+    return theEmulation.GetDisplayRefreshRate();
+}
+
 void EmulationToggleFullscreen(void)
 {
 	theEmulation.ToggleFullscreen();

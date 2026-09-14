@@ -32,6 +32,7 @@
 #include "XCmd.h"
 #include "Clipboard.h"		// MagiC clipboad handling
 #include "missing.h"
+#include "DisplayUpdateScheduler.h"
 
 class EmulationRunner
 {
@@ -67,12 +68,15 @@ class EmulationRunner
 		int OpenWindow(void);
 		void CloseWindow(void);
 		void ToggleFullscreen(void);
+		void SetDisplayRefreshRate(unsigned hz) { m_displayUpdates.SetRefreshRate(hz); }
+		unsigned GetDisplayRefreshRate(void) const { return m_displayUpdates.GetRefreshRate(); }
 		void Cleanup(void);
 		void ChangeAtariDrive(unsigned drvnr, CFURLRef drvUrl, unsigned long flags);
 		CFURLRef GetAtariDrive(unsigned drvnr);
 		CFURLRef GetRootfsUrl(void);
 		bool isRunning(void) { return m_EmulatorRunning; }
 	private:
+        DisplayUpdateScheduler m_displayUpdates;
         static Uint32 LoopTimer(Uint32 interval, void* param);
 
         void HandleUserEvents(SDL_Event* event);

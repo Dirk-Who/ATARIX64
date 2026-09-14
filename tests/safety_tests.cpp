@@ -14,12 +14,14 @@ static void test_memory()
                 std::fill(ram.begin(),ram.end(),0x55);
                 std::fill(video.begin(),video.end(),0x55);
                 busErrors=0;
+                atomic_store_explicit(&changed, 0, memory_order_relaxed);
                 const bool valid=a<1088 && bytes<=1088-a;
                 uint32_t value=0x12345678;
                 if(bytes==1) m68k_write_memory_8(a,value);
                 if(bytes==2) m68k_write_memory_16(a,value);
                 if(bytes==4) m68k_write_memory_32(a,value);
                 CHECK(busErrors==(valid?0:1));
+                CHECK(atomic_exchange(&changed, 0) == (valid && (uint64_t)a+bytes>Adr68kVideo ? 1:0));
                 for(size_t i=1024;i<ram.size();++i) CHECK(ram[i]==0x55);
                 for(size_t i=64;i<video.size();++i) CHECK(video[i]==0x55);
                 if(valid) {
@@ -198,6 +200,7 @@ static void test_geometry()
 int main(int argc,char **argv)
 {
     CHECK(argc==2);
+    test_filename_regression(argv[1]);
     test_memory(); test_pixels(); test_files(argv[1]); test_text(); test_geometry();
     printf("PASS: %d assertions\n",checks);
 }

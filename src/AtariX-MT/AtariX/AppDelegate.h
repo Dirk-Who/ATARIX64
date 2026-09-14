@@ -13,6 +13,7 @@
 - (IBAction)actionQuit:(id)sender;
 - (IBAction)actionRun:(id)sender;
 - (IBAction)actionToggleFullscreen:(id)sender;
+- (IBAction)actionSetDisplayRefreshRate:(id)sender;
 - (IBAction)actionChooseRootfs:(id)sender;
 - (IBAction)actionRevertRootfs:(id)sender;
 - (IBAction)actionCut:(id)sender;

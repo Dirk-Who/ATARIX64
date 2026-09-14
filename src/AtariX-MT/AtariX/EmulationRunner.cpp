@@ -1303,19 +1303,21 @@ Uint32 EmulationRunner::LoopTimer(Uint32 interval, void *param)
 			p->m_Emulator.SendVBL();
 		}
 
-		if ((p->m_200HzCnt % 8) == 0 && p->m_Emulator.bVideoBufChanged)
+		if (p->m_displayUpdates.TrySchedule(p->m_200HzCnt,
+                atomic_load_explicit(&p->m_Emulator.bVideoBufChanged, memory_order_acquire) != 0))
 		{
-			// screen update runs with 25 Hz
+			// Host output is selectable at 25/50 Hz; guest interrupt timing is unchanged.
 
 			// Create a user event to call the game loop.
-			SDL_Event event;
+			SDL_Event event = {};
 			
 			event.type = SDL_USEREVENT;
 			event.user.code = RUN_EMULATOR_WINDOW_UPDATE;
 			event.user.data1 = 0;
 			event.user.data2 = 0;
 
-			SDL_PushEvent(&event);
+			if (SDL_PushEvent(&event) <= 0)
+                p->m_displayUpdates.FinishUpdate(); // Allow retry after a filtered/failed push.
 		}
 	}
 
@@ -1744,6 +1746,8 @@ void EmulationRunner::HandleUserEvents(SDL_Event* event)
 			{
 				EmulatorWindowUpdate();
 			}
+            // Keep the slot occupied until rendering finishes, including when no window exists.
+            m_displayUpdates.FinishUpdate();
 			break;
 
 		case STOP_EMULATOR:

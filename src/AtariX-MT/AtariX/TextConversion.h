@@ -30,6 +30,11 @@ class CTextConversion
 	// False means the destination was too small; it remains NUL-terminated.
 	static bool Atari2HostUtf8Copy(char *dst, const char *src, size_t count);
 	static bool Host2AtariUtf8Copy(char *dst, const char *src, size_t count);
+	// Filesystem names: lossless Unicode escapes, no UTF-8 guessing or
+	// normalization. Source must be NUL-terminated within MAXPATHNAMELEN.
+	// Failure clears dst and sets errno (EILSEQ, EINVAL, ENAMETOOLONG).
+	static bool AtariFilenameToHost(char *dst, const char *src, size_t count);
+	static bool HostFilenameToAtari(char *dst, const char *src, size_t count);
 
    private:
 	// Funktionen

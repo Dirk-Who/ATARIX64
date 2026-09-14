@@ -437,7 +437,7 @@ void m68k_write_memory_8(m68k_addr_type address, m68k_data_type value)
 		if (bAtariVideoRamHostEndian)
 			address ^= 3;
 		*((uint8_t *) (HostVideoAddr + address)) = (uint8_t) value;
-		atomic_exchange(p_bVideoBufChanged, 1);
+		atomic_store_explicit(p_bVideoBufChanged, 1, memory_order_release);
 	} else
 	{
 		const char *Name;
@@ -511,7 +511,7 @@ void m68k_write_memory_16(m68k_addr_type address, m68k_data_type value)
 			*((uint16_t *) (HostVideoAddr + address)) = (uint16_t) value;		// x86 has bgr instead of rgb
 		else
 			*((uint16_t *) (HostVideoAddr + address)) = (uint16_t) cpu_to_be16(value);
-		atomic_exchange(p_bVideoBufChanged, 1);
+		atomic_store_explicit(p_bVideoBufChanged, 1, memory_order_release);
 	}
 	else
 	{
@@ -889,7 +889,7 @@ void m68k_write_memory_32(m68k_addr_type address, m68k_data_type value)
 			*((uint32_t *) (HostVideoAddr + address)) = value;		// x86 has brg instead of rgb
 		else
 			*((uint32_t *) (HostVideoAddr + address)) = cpu_to_be32(value);
-		atomic_exchange(p_bVideoBufChanged, 1);
+		atomic_store_explicit(p_bVideoBufChanged, 1, memory_order_release);
 	}
 	else
 	{

@@ -38,6 +38,8 @@ int EmulationInit(void);
 int EmulationOpenWindow(void);
 void EmulationCloseWindow(void);
 void EmulationToggleFullscreen(void);
+void EmulationSetDisplayRefreshRate(unsigned hz);
+unsigned EmulationGetDisplayRefreshRate(void);
 void EmulationRun(void);
 void EmulationRunSdl(void);
 int EmulationIsRunning(void);
