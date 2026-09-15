@@ -1900,12 +1900,32 @@ void CMagiC::TerminateThread(void)
 *
 **********************************************************************/
 
+// Runs on the emulator thread. Staging mouse state does not write any ring
+// bytes: AtariGetKeyboardOrMouseData creates the packet after keys drain.
+void CMagiC::PrepareMouseKeyboardInterrupt(void)
+{
+    OS_EnterCriticalRegion(m_KbCriticalRegion);
+    const bool newButton0 = m_MagiCMouse.SetNewButtonState(0, m_bInterruptMouseButton[0]);
+    const bool newButton1 = m_MagiCMouse.SetNewButtonState(1, m_bInterruptMouseButton[1]);
+    const bool newPosition = m_MagiCMouse.SetNewPosition(m_InterruptMouseWhere);
+    const bool queuedKeys = (m_pKbRead != m_pKbWrite);
+    // Host writers hold the same mutex: a later update cannot be cleared here.
+    m_bInterruptMouseKeyboardPending = false;
+    if (queuedKeys || newButton0 || newButton1 || newPosition)
+    {
+        m_bInterruptPending = true;
+#if defined(USE_ASGARD_PPC_68K_EMU)
+        Asgard68000SetIRQLineAndExcVector(k68000IRQLineIRQ6, k68000IRQStateAsserted, 70);
+#else
+        m68k_set_irq(M68K_IRQ_6);
+#endif
+    }
+    OS_ExitCriticalRegion(m_KbCriticalRegion);
+}
+
 void CMagiC::EmuThread( void )
 {
 	uint32_t EventFlags;
-	bool bNewBstate[2];
-	bool bNewMpos;
-	bool bNewKey;
 
 
 	m_bEmulatorIsRunning = true;
@@ -1986,37 +2006,7 @@ void CMagiC::EmuThread( void )
 
 		if	(m_bInterruptMouseKeyboardPending)
 		{
-#ifdef _DEBUG_KB_CRITICAL_REGION
-			DebugInfo("CMagiC::EmuThread() --- Enter critical region m_KbCriticalRegion");
-#endif
-			OS_EnterCriticalRegion(m_KbCriticalRegion);
-			if	(GetKbBufferFree() < 3)
-			{
-				DebugError("CMagiC::EmuThread() --- Tastenpuffer ist voll");
-			}
-			else
-			{
-				bNewBstate[0] = m_MagiCMouse.SetNewButtonState(0, m_bInterruptMouseButton[0]);
-				bNewBstate[1] = m_MagiCMouse.SetNewButtonState(1, m_bInterruptMouseButton[1]);
-				bNewMpos =  m_MagiCMouse.SetNewPosition(m_InterruptMouseWhere);
-				bNewKey = (m_pKbRead != m_pKbWrite);
-				if	(bNewBstate[0] || bNewBstate[1] || bNewMpos || bNewKey)
-				{
-					// Interrupt-Vektor 70 für Tastatur/MIDI mitliefern
-					m_bInterruptPending = true;
-#if defined(USE_ASGARD_PPC_68K_EMU)
-					Asgard68000SetIRQLineAndExcVector(k68000IRQLineIRQ6, k68000IRQStateAsserted, 70);
-#else
-					m68k_set_irq(M68K_IRQ_6);	// autovector interrupt 70
-#endif
-				}
-			}
-			m_bInterruptMouseKeyboardPending = false;
-
-			OS_ExitCriticalRegion(m_KbCriticalRegion);
-#ifdef _DEBUG_KB_CRITICAL_REGION
-			DebugInfo("CMagiC::EmuThread() --- Exited critical region m_KbCriticalRegion");
-#endif
+            PrepareMouseKeyboardInterrupt();
 			m_bWaitEmulatorForIRQCallback = true;
 			while(m_bInterruptPending)
 #if defined(USE_ASGARD_PPC_68K_EMU)
@@ -2345,6 +2335,37 @@ int CMagiC::SendKeyboard(uint32_t message, bool KeyUp)
  * Rückgabe != 0, wenn die letzte Nachricht noch aussteht.
  *
  **********************************************************************/
+
+// A synthetic wheel key must be queued entirely or omitted entirely.
+// Keep both writes under the input mutex, including across ring wraparound.
+int CMagiC::SendSdlKeyboardPair(int sdlScanCode)
+{
+#ifdef _DEBUG_NO_ATARI_KB_INTERRUPTS
+    return 0;
+#endif
+    if (!m_bEmulatorIsRunning)
+        return 0;
+    const unsigned char key = m_MagiCKeyboard.SdlScanCode2AtariScanCode(sdlScanCode);
+    if (!key)
+        return 0;
+    OS_EnterCriticalRegion(m_KbCriticalRegion);
+    if (GetKbBufferFree() < 2)
+    {
+        OS_ExitCriticalRegion(m_KbCriticalRegion);
+        return 1;
+    }
+    PutKeyToBuffer(key);
+    PutKeyToBuffer(key | 0x80);
+    m_bInterruptMouseKeyboardPending = true;
+#if defined(USE_ASGARD_PPC_68K_EMU)
+    Asgard68000SetExitImmediately();
+#else
+    m68k_end_timeslice();
+#endif
+    OS_SetEvent(m_InterruptEvent, EMU_INTPENDING_KBMOUSE);
+    OS_ExitCriticalRegion(m_KbCriticalRegion);
+    return 0;
+}
 
 int CMagiC::SendSdlKeyboard(int sdlScanCode, bool KeyUp)
 {
@@ -4547,7 +4568,7 @@ uint32_t CMagiC::AtariGetKeyboardOrMouseData(uint32_t params, unsigned char *Adr
 	if	(!ret)
 	{
 		// Die Maus wird erst erkannt, wenn VDI initialisiert ist
-		if	(m_LineAVars)
+		if (m_LineAVars && GetKbBufferFree() >= (int)sizeof(buf))
 			ret = m_MagiCMouse.GetNewPositionAndButtonState(buf);
 		if	(ret)
 		{

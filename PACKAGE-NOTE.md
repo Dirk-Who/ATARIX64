@@ -1,15 +1,17 @@
-# AtariX 0.7.2 – Release source and application
+# AtariX 0.7.3 – Release source and application
 
-The current release is ATARIX-A64-0.7.2-Release. See RELEASE_NOTES_0.7.2.md
-for changes, validation and the user-reported runtime confirmation.
+Current release: ATARIX-A64-0.7.3-Release. See RELEASE_NOTES_0.7.3.md
+for input fixes, validation and the successful user-reported scroll test.
 
 - release/AtariX.app.zip contains the same user-tested ARM64 application as
-  the separate release asset ATARIX-A64-0.7.2-Release.zip.
+  the release asset ATARIX-A64-0.7.3-Release.zip, requiring macOS 12 or newer.
 - The Git repository does not bundle SDL2.framework. Run
   scripts/bootstrap-sdl2.sh before building a Git checkout.
-- The separate ATARIX-0.7.2-source.zip release asset includes SDL2.framework
+- The separate ATARIX-0.7.3-source.zip release asset includes SDL2.framework
   2.32.10 for offline builds, but no prebuilt AtariX application.
-- That source asset has SOURCE_COMMIT.txt, SOURCE_SHA256SUMS.txt and
+- That source asset includes SOURCE_COMMIT.txt, SOURCE_SHA256SUMS.txt and
   SOURCE_SYMLINKS.json to identify its commit, files and framework links.
-- Keep the application and source packages separate. Verify SHA256SUMS.txt
-  before use. Use macOS ditto when extracting to preserve framework links.
+- Application and source packages are separate. Verify SHA256SUMS.txt and
+  use macOS ditto to preserve framework links when extracting.
+- Release/CI builds set MACOSX_DEPLOYMENT_TARGET=12.0. The project retains
+  its 11.0 default for older compatible toolchains; Xcode 27 needs 12.0+.

@@ -1621,8 +1621,9 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 		case SDL_MOUSEWHEEL:
 		{
 			const SDL_MouseWheelEvent *ev = (SDL_MouseWheelEvent *) &event;
-			int wheelX = ev->x;
-			int wheelY = ev->y;
+			// Clamp before negating: SDL deltas may include INT_MIN.
+			int wheelX = ev->x < -8 ? -8 : ev->x > 8 ? 8 : ev->x;
+			int wheelY = ev->y < -8 ? -8 : ev->y > 8 ? 8 : ev->y;
 			int scanCode = SDL_SCANCODE_UNKNOWN;
 			int turns = 0;
 
@@ -1659,9 +1660,7 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 
 			while (turns-- > 0 && scanCode != SDL_SCANCODE_UNKNOWN)
 			{
-				if (m_Emulator.SendSdlKeyboard(scanCode, false) != 0)
-					break;
-				if (m_Emulator.SendSdlKeyboard(scanCode, true) != 0)
+				if (m_Emulator.SendSdlKeyboardPair(scanCode) != 0)
 					break;
 			}
 		}

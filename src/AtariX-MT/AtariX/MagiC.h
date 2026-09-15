@@ -59,6 +59,7 @@ class CMagiC
 
 //	int SendKeyboard(uint32_t message, bool KeyUp);
 	int SendSdlKeyboard(int sdlScanCode, bool KeyUp);
+	int SendSdlKeyboardPair(int sdlScanCode);
 	int SendKeyboardShift(uint32_t modifiers);
 	int SendMousePosition(int x, int y);
 	int SendMouseButton(unsigned int NumOfButton, bool bIsDown);
@@ -110,6 +111,7 @@ class CMagiC
 	int GetKbBufferFree( void );
 	void PutKeyToBuffer(unsigned char key);
 	void EmuThread(void);
+	void PrepareMouseKeyboardInterrupt(void);
 #if defined(USE_ASGARD_PPC_68K_EMU)
 	static int IRQCallback(int IRQLine, void *thisPtr);
 #else
