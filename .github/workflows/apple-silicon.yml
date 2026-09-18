@@ -21,6 +21,7 @@ jobs:
           python3 tests/run_safety_tests.py
           python3 tests/run_display_tests.py
           python3 tests/run_input_tests.py
+          python3 tests/run_mouse_coordinates_tests.py
 
       - name: Build AtariX for arm64
         run: |
@@ -40,7 +41,7 @@ jobs:
           APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
           lipo -info "${APP}/Contents/MacOS/AtariX"
           lipo -info "${APP}/Contents/Frameworks/SDL2.framework/SDL2"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP}/Contents/Info.plist")" = "0.7.3"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP}/Contents/Info.plist")" = "0.7.4"
           test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "${APP}/Contents/Info.plist")" = "12.0"
 
       - name: Ad-hoc sign application bundle
@@ -52,29 +53,29 @@ jobs:
           codesign --force --sign - "${APP}"
           codesign --verify --deep --strict --verbose=2 "${APP}"
 
-      - name: Package ATARIX-A64-0.7.3-Release
+      - name: Package ATARIX-A64-0.7.4-Release
         run: |
           APP="${RUNNER_TEMP}/AtariXDerivedData/Build/Products/Release/AtariX.app"
-          ditto -c -k --sequesterRsrc --keepParent "${APP}" "${RUNNER_TEMP}/ATARIX-A64-0.7.3-Release.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${APP}" "${RUNNER_TEMP}/ATARIX-A64-0.7.4-Release.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ATARIX-A64-0.7.3-Release
-          path: ${{ runner.temp }}/ATARIX-A64-0.7.3-Release.zip
+          name: ATARIX-A64-0.7.4-Release
+          path: ${{ runner.temp }}/ATARIX-A64-0.7.4-Release.zip
           if-no-files-found: error
 
-      - name: Publish ATARIX-A64-0.7.3-Release
-        if: github.event_name == 'push' && github.ref == 'refs/tags/ATARIX-A64-0.7.3-Release'
+      - name: Publish ATARIX-A64-0.7.4-Release
+        if: github.event_name == 'push' && github.ref == 'refs/tags/ATARIX-A64-0.7.4-Release'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ATARIX-A64-0.7.3-Release
+          RELEASE_TAG: ATARIX-A64-0.7.4-Release
         run: |
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "Release ${RELEASE_TAG} already exists; nothing to publish."
           else
             gh release create "${RELEASE_TAG}" \
-              "${RUNNER_TEMP}/ATARIX-A64-0.7.3-Release.zip#ATARIX-A64-0.7.3-Release.zip" \
+              "${RUNNER_TEMP}/ATARIX-A64-0.7.4-Release.zip#ATARIX-A64-0.7.4-Release.zip" \
               --target "${GITHUB_SHA}" \
-              --title "ATARIX-A64-0.7.3-Release" \
-              --notes-file RELEASE_NOTES_0.7.3.md
+              --title "ATARIX-A64-0.7.4-Release" \
+              --notes-file RELEASE_NOTES_0.7.4.md
           fi

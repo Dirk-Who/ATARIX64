@@ -9,11 +9,11 @@ repository continues the original AtariX code base and maintains it for
 current 64-bit Macs, with the primary focus on native Apple Silicon systems.
 
 The current public release is
-[ATARIX-A64-0.7.3](https://github.com/Dirk-Who/ATARIX64/releases/tag/ATARIX-A64-0.7.3-Release).
+[ATARIX-A64-0.7.4](https://github.com/Dirk-Who/ATARIX64/releases/tag/ATARIX-A64-0.7.4-Release).
 
-The 0.7.3 application requires Apple Silicon and macOS 12 or newer.
+The 0.7.4 application requires Apple Silicon and macOS 12 or newer.
 
-- [Changes and validation for 0.7.3](RELEASE_NOTES_0.7.3.md)
+- [Changes and validation for 0.7.4](RELEASE_NOTES_0.7.4.md)
 - [Apple Silicon build instructions](APPLE_SILICON.md)
 - [Current feature overview](FEATURES.md)
 - [Development history](HISTORY.md)

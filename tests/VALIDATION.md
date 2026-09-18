@@ -1,3 +1,20 @@
+# Version 0.7.4 validation (2026-09-18)
+
+- Windowed coordinate regression: 672 checks passed using real SDL 2.32.10
+  event filtering and the extracted production handler under ASan/UBSan.
+- Original 0.7.3 baseline: 66 failing assertions reproduce the regression;
+  a 660x495 window ends at guest y=464 instead of y=479.
+- Input suite: 210435 assertions passed under ASan/UBSan (concurrency count varies).
+- Display suite: 1198 assertions passed under ASan/UBSan.
+- Safety suite: 74435 assertions passed.
+- ARM64 Release build succeeded with Xcode 27, deployment target macOS 12.0.
+  App version and NatFeats version string are 0.7.4.
+- The user confirmed successful windowed operation of the same mouse fix in
+  0.7.3-mousefix1. The 0.7.4 rebuild changes the version identifiers.
+- App and embedded framework are ad-hoc signed. Existing build warnings remain.
+
+Earlier release validation follows for historical reference.
+
 # Validierung für AtariX 0.7
 
 Basiscommit: `2f32cea89312d939d35cc1b522c98581da255334` plus die Sicherheits-

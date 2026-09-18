@@ -1556,12 +1556,15 @@ void EmulationRunner::EventHandle(SDL_Event &event)
 			}
 			else
 			{
+				/*
+				 * SDL_RenderSetLogicalSize already transforms absolute mouse
+				 * events into renderer logical coordinates. Converting them
+				 * again applies the viewport offset and scale twice, making
+				 * the guest screen edges unreachable in resized windows.
+				 * Only AtariX's optional pixel doubling remains to be undone.
+				 */
 				float logicalX = (float) ev->x;
 				float logicalY = (float) ev->y;
-				if (m_sdl_renderer)
-					SDL_RenderWindowToLogical(
-						m_sdl_renderer, ev->x, ev->y,
-						&logicalX, &logicalY);
 				if (m_atariScreenStretchX)
 					logicalX /= 2.0f;
 				if (m_atariScreenStretchY)

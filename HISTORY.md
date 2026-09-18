@@ -127,3 +127,11 @@ required SDL2 framework, and are ad-hoc signed and verified. They are not
 Apple-notarised. Every functional change should first be tested under MagiC
 and then recorded here and in the versioned release notes before publishing a new
 release.
+
+### 0.7.4 — windowed mouse coordinates
+
+- Removed the duplicate logical-coordinate conversion of absolute SDL mouse
+  events, restoring access to the edges of resized Atari windows.
+- Added regression coverage with the real SDL event filter for window sizes,
+  letterboxing, pixel doubling and relative-mode edge clamping.
+- The user confirmed the mouse correction works in the windowed test build.
